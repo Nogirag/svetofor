@@ -200,6 +200,8 @@ node tests/owner-login.mjs --base http://localhost:8080      # по уже за�
 
 Нужен HTTPS: без защищённого соединения браузер не даёт ни service worker, ни установку на главный экран.
 
+**Готовый адрес (GitHub Pages).** Репозиторий публикует содержимое `public/` workflow-файлом [.github/workflows/pages.yml](.github/workflows/pages.yml): **https://nogirag.github.io/svetofor/** — это вариант 2 без Node: работает сигнал, отсчёт, ночной режим и локальные отметки, серверной таблицы и правки цикла на Pages нет. Свой адрес получается форком репозитория с тем же workflow.
+
 **Вариант 1 — Node на VPS или в PaaS.** Один процесс раздаёт страницу, принимает отметки и отдаёт конфиг:
 
 ```bash
