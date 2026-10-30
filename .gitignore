@@ -16,15 +16,5 @@ node_modules/
 # таблица отметок на сервере
 server/data/
 
-# секрет: пароль владельца (в git его класть нельзя)
-server/config/admin.password
-server/config/admin.key
-
-# свёрток пароля для входа в панели — свой на каждой установке
-public/js/owner-key.js
-
 # исходники в Word остаются локально; тексты для репозитория — в docs/
 *.docx
-
-# открытый пароль владельца — только локально, в git нельзя
-password.txt

@@ -9,29 +9,26 @@
  *
  * Отметки складываются в отдельную папку server/data/observations в виде
  * таблицы: по одному JSONL-файлу на день, одна строка = одна отметка.
- * /api/export.csv собирает из них единую таблицу — только по паролю владельца.
+ * /api/export.csv собирает из них единую таблицу.
  *
- * Настройки цикла лежат в server/config/settings.json и правятся по FTP:
- * страница читает их через GET /api/config и перечитывает каждые 15 с, поэтому
- * правка файла на сервере доходит до всех телефонов сама, без доступа к браузеру.
- * Пароль владельца — в server/config/admin.password (одна строка) или в
- * ADMIN_PASSWORD. Файл может хранить и хеш: «sha256:<hex>».
+ * Настройки цикла лежат в server/config/settings.json и правятся по FTP или
+ * страницей: страница читает их через GET /api/config и перечитывает каждые
+ * 15 с, поэтому правка доходит до всех телефонов сама. Пароля владельца нет:
+ * запись конфига и выгрузка открыты всем, кто знает адрес, — на публичном
+ * хостинге это означает, что цикл может поменять любой посетитель.
  *
  * Переменные окружения:
  *   PORT                порт (по умолчанию 8080)
  *   DATA_DIR            папка с таблицей (по умолчанию server/data/observations)
  *   CONFIG_FILE         файл настроек цикла (по умолчанию server/config/settings.json)
- *   ADMIN_PASSWORD      пароль для выгрузки и записи конфига; иначе читаем файл
- *   ADMIN_PASSWORD_FILE путь к файлу с паролем (по умолчанию server/config/admin.password)
  *   FEEDBACK_KEY        если задан, отметки принимаются только с заголовком
  *                       x-feedback-key; страница должна передать его в meta-теге
  *   STATIC_DIR          папка со страницей (по умолчанию public)
  */
 
 import http from 'node:http';
-import { createHash, timingSafeEqual } from 'node:crypto';
+import { existsSync } from 'node:fs';
 import { appendFile, mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises';
-import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -39,20 +36,16 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const STATIC_DIR = path.resolve(process.env.STATIC_DIR || path.join(ROOT, 'public'));
 const DATA_DIR = path.resolve(process.env.DATA_DIR || path.join(ROOT, 'server', 'data', 'observations'));
 const CONFIG_FILE = path.resolve(process.env.CONFIG_FILE || path.join(ROOT, 'server', 'config', 'settings.json'));
-const ADMIN_PASSWORD_FILE = path.resolve(
-  process.env.ADMIN_PASSWORD_FILE || path.join(ROOT, 'server', 'config', 'admin.password')
-);
 const PORT = Number(process.env.PORT || 8080);
 const FEEDBACK_KEY = process.env.FEEDBACK_KEY || '';
-const ADMIN_PASSWORD = (process.env.ADMIN_PASSWORD || readSecretFile(ADMIN_PASSWORD_FILE) || '').trim();
 const MAX_BODY = 8192;
 const MAX_WINDOW_DAYS = 90;
 const CONFIG_TTL_MS = 15000;
 const MSK_OFFSET_MS = 180 * 60000;
 const RATE_LIMIT = { windowMs: 60000, max: 120 };
-// пароль набирают с телефона и ошибаются; но и перебирать его не должно быть
-// раздолья: 20 обращений к закрытым разделам в минуту на адрес
-const ADMIN_RATE_LIMIT = { windowMs: 60000, max: 20 };
+// запись цикла и выгрузка — тяжёлые операции: 20 штук в минуту на адрес хватает
+// и человеку, и скрипту проверки, а случайный цикл запросов не забьёт диск
+const WRITE_RATE_LIMIT = { windowMs: 60000, max: 20 };
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -69,16 +62,8 @@ const MIME = {
 
 await mkdir(DATA_DIR, { recursive: true });
 
-function readSecretFile(file) {
-  try {
-    return existsSync(file) ? readFileSync(file, 'utf8').split(/\r?\n/)[0] : '';
-  } catch (err) {
-    return '';
-  }
-}
-
 const buckets = new Map();
-const adminBuckets = new Map();
+const writeBuckets = new Map();
 
 function hit(store, ip, limit) {
   const now = Date.now();
@@ -258,30 +243,6 @@ async function saveConfig(config) {
   return normalized;
 }
 
-function equalSecrets(given, expected) {
-  const a = Buffer.from(String(given), 'utf8');
-  const b = Buffer.from(String(expected), 'utf8');
-  // timingSafeEqual требует равной длины; неравную сравниваем через хеши,
-  // чтобы длина пароля не читалась по времени ответа
-  if (a.length === b.length) {
-    try { return timingSafeEqual(a, b); } catch (err) { return false; }
-  }
-  return timingSafeEqual(createHash('sha256').update(a).digest(), createHash('sha256').update(b).digest());
-}
-
-// В файле пароля можно хранить сам секрет одной строкой, можно хеш:
-// «sha256:<hex>» — тогда утечка дерева сервера не отдаёт готовый пароль.
-function matchesPassword(request) {
-  if (!ADMIN_PASSWORD) return false;
-  const given = String(request.headers['x-admin-password'] || '');
-  if (!given) return false;
-  if (/^sha256:[0-9a-f]{64}$/i.test(ADMIN_PASSWORD)) {
-    const hex = createHash('sha256').update(given, 'utf8').digest('hex');
-    return equalSecrets(hex, ADMIN_PASSWORD.slice(7).toLowerCase());
-  }
-  return equalSecrets(given, ADMIN_PASSWORD);
-}
-
 function normalizeRow(body, receivedAt) {
   if (!body || typeof body !== 'object') return null;
   const ts = toInt(body.ts, 1577836800000, receivedAt + 86400000);
@@ -450,10 +411,7 @@ function serveStatic(request, response, url) {
   readFile(target).then((data) => {
     const type = MIME[path.extname(target).toLowerCase()] || 'application/octet-stream';
     const headers = { 'content-type': type };
-    // свёрток пароля меняется при смене пароля — кэшировать его нельзя
-    if (target.endsWith('owner-key.js')) {
-      headers['cache-control'] = 'no-store';
-    } else if (target.endsWith('index.html') || target.endsWith('add-to-home.html') || target.endsWith('sw.js')) {
+    if (target.endsWith('index.html') || target.endsWith('add-to-home.html') || target.endsWith('sw.js')) {
       headers['cache-control'] = 'no-cache';
     } else if (type.startsWith('image/') || type.startsWith('text/css') || type.startsWith('text/javascript')) {
       headers['cache-control'] = 'public, max-age=3600';
@@ -478,8 +436,7 @@ const server = http.createServer(async (request, response) => {
     json(response, 200, {
       ok: true,
       timezone: 'GMT+3 (МСК)',
-      receiverKey: FEEDBACK_KEY ? 'on' : 'off',
-      ownerPassword: ADMIN_PASSWORD ? 'on' : 'off'
+      receiverKey: FEEDBACK_KEY ? 'on' : 'off'
     });
     return;
   }
@@ -519,16 +476,8 @@ const server = http.createServer(async (request, response) => {
   }
 
   if (url.pathname === '/api/config' && request.method === 'POST') {
-    if (hit(adminBuckets, ip, ADMIN_RATE_LIMIT)) {
+    if (hit(writeBuckets, ip, WRITE_RATE_LIMIT)) {
       json(response, 429, { ok: false, error: 'rate-limit' });
-      return;
-    }
-    if (!ADMIN_PASSWORD) {
-      json(response, 503, { ok: false, error: 'owner-password-not-configured' });
-      return;
-    }
-    if (!matchesPassword(request)) {
-      json(response, 403, { ok: false, error: 'owner-password' });
       return;
     }
     let body;
@@ -547,22 +496,6 @@ const server = http.createServer(async (request, response) => {
     return;
   }
 
-  // Проверка пароля владельца: страница узнаёт только «верно / неверно»,
-  // сам пароль в браузер не отдаётся.
-  if (url.pathname === '/api/admin/check' && request.method === 'GET') {
-    if (hit(adminBuckets, ip, ADMIN_RATE_LIMIT)) {
-      json(response, 429, { ok: false, error: 'rate-limit' });
-      return;
-    }
-    if (!ADMIN_PASSWORD) {
-      json(response, 503, { ok: false, error: 'owner-password-not-configured' });
-      return;
-    }
-    const allowed = matchesPassword(request);
-    json(response, allowed ? 200 : 401, { ok: allowed });
-    return;
-  }
-
   if (url.pathname === '/api/summary' && request.method === 'GET') {
     const days = Number(url.searchParams.get('days')) || 7;
     const rows = await readRows(days);
@@ -570,18 +503,11 @@ const server = http.createServer(async (request, response) => {
     return;
   }
 
-  // Выгрузка таблицы — только по паролю владельца: в ней device-id и моменты отметок.
+  // Выгрузка таблицы: в ней device-id и моменты отметок, поэтому адрес сервера
+  // стоит держать там, где эти данные не должны быть публичными.
   if (url.pathname === '/api/export.csv' && request.method === 'GET') {
-    if (hit(adminBuckets, ip, ADMIN_RATE_LIMIT)) {
+    if (hit(writeBuckets, ip, WRITE_RATE_LIMIT)) {
       json(response, 429, { ok: false, error: 'rate-limit' });
-      return;
-    }
-    if (!ADMIN_PASSWORD) {
-      json(response, 503, { ok: false, error: 'owner-password-not-configured' });
-      return;
-    }
-    if (!matchesPassword(request)) {
-      json(response, 403, { ok: false, error: 'owner-password' });
       return;
     }
     const days = Number(url.searchParams.get('days')) || MAX_WINDOW_DAYS;
@@ -614,7 +540,5 @@ server.listen(PORT, () => {
   console.log('Таблица отметок: ' + DATA_DIR);
   console.log('Конфиг цикла:    ' + CONFIG_FILE);
   console.log(FEEDBACK_KEY ? 'Ключ приёмника включён' : 'Ключ приёмника не задан — принимает без проверки');
-  console.log(ADMIN_PASSWORD
-    ? 'Пароль владельца задан (' + (process.env.ADMIN_PASSWORD ? 'ADMIN_PASSWORD' : ADMIN_PASSWORD_FILE) + ')'
-    : 'Пароля владельца нет — выгрузка и запись конфига закрыты (503)');
+  console.log('Пароля нет: запись цикла и выгрузка открыты всем, кто знает адрес');
 });

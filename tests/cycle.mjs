@@ -198,8 +198,6 @@ async function waitUp(base) {
   throw new Error('сервер не поднялся: ' + base);
 }
 
-const TEST_PASSWORD = 'cycle-test-secret';
-
 async function integration() {
   const dir = mkdtempSync(path.join(tmpdir(), 'tl-cycle-'));
   const configFile = path.join(dir, 'settings.json');
@@ -211,8 +209,7 @@ async function integration() {
       env: Object.assign({}, process.env, {
         PORT: String(port),
         CONFIG_FILE: configFile,
-        DATA_DIR: path.join(dir, 'data'),
-        ADMIN_PASSWORD: TEST_PASSWORD
+        DATA_DIR: path.join(dir, 'data')
       }),
       stdio: 'ignore',
       windowsHide: true
@@ -223,7 +220,7 @@ async function integration() {
     const getConfig = () => fetch(base + '/api/config').then((r) => r.json());
     const postConfig = (body) => fetch(base + '/api/config', {
       method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-admin-password': TEST_PASSWORD },
+      headers: { 'content-type': 'application/json' },
       body: JSON.stringify(body)
     });
 
@@ -263,12 +260,19 @@ async function integration() {
       { enabled: true, start: '22:30', end: '05:00', mode: 'cycle' }))).json();
     eq('I12 ночной якорь из night.cycle', saved.config.night.phaseStart, '23:07:15');
 
-    const denied = await fetch(base + '/api/config', {
+    // пароля нет: запись без заголовков принимается, а битое тело — по-прежнему нет
+    const open = await fetch(base + '/api/config', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(draft('09:00:00', '23:00:00'))
     });
-    eq('I13 якорь без парола не пишется', denied.status, 403);
+    eq('I13 запись конфига без пароля → 200', open.status, 200);
+    const broken = await fetch(base + '/api/config', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{nope'
+    });
+    eq('I13b битый конфиг → 400', broken.status, 400);
 
     // то, что записал сервер, страница должна разобрать в тот же якорь
     const roundTrip = S.normalize({ day: saved.config.day, nightCycle: saved.config.night,

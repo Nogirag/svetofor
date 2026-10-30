@@ -25,9 +25,5 @@ jobs:
       - name: Расписание и калибровка
         run: node tests/cycle.mjs
 
-      # В репозитории нет ни пароля, ни его свёртков — тесты создают их сами.
-      - name: Секрет для тестов входа
-        run: node tools/set-owner-password.mjs --password ci-owner-password-0123456789
-
-      - name: Вход к закрытым разделам
-        run: TL_ADMIN_PASSWORD=ci-owner-password-0123456789 node tests/owner-login.mjs
+      - name: Открытый API без пароля
+        run: node tests/api.mjs

@@ -1,6 +1,6 @@
 /*
  * Сбор отметок: локальная копия, отправка на сервер, офлайн-очередь,
- * аналитика смещения зелёного и доступ к закрытым разделам (конфиг, выгрузка).
+ * аналитика смещения зелёного, чтение и запись серверного конфига.
  * Вешается на window.TrafficFeedback.
  */
 (function (global) {
@@ -9,8 +9,7 @@
   var KEYS = {
     observations: 'trafficlight.observations.v1',
     queue: 'trafficlight.queue.v1',
-    device: 'trafficlight.device.v1',
-    owner: 'trafficlight.owner.v1'
+    device: 'trafficlight.device.v1'
   };
   var MAX_OBSERVATIONS = 5000;
   var MAX_QUEUE = 300;
@@ -24,12 +23,10 @@
   var endpoint = '/api/observations';
   var summaryEndpoint = '/api/summary';
   var configEndpoint = '/api/config';
-  var adminCheckEndpoint = '/api/admin/check';
   var exportEndpoint = '/api/export.csv';
   var serverState = 'unknown';
   var summary = null;
   var feedbackKey = '';
-  var ownerPassword = '';
 
   function read(key, fallback) {
     try {
@@ -63,9 +60,7 @@
     observations = Array.isArray(storedObs) ? storedObs : [];
     var storedQueue = read(KEYS.queue, []);
     queue = Array.isArray(storedQueue) ? storedQueue : [];
-    var storedOwner = read(KEYS.owner, '');
-    ownerPassword = typeof storedOwner === 'string' ? storedOwner : '';
-    return { deviceId: deviceId, storageOk: storageOk, hasOwnerPassword: !!ownerPassword };
+    return { deviceId: deviceId, storageOk: storageOk };
   }
 
   // Отметка — это строка будущей таблицы. Набор полей одинаковый в локальной
@@ -180,53 +175,10 @@
       });
   }
 
-  // ---------- закрытые разделы: конфиг и выгрузка ----------
-
-  // Заголовок HTTP живёт в Latin-1: пароль с кириллицей или пробелом не уйдёт, а
-  // fetch упадёт с сетевой ошибкой. Проверяем до запроса, иначе человек видит
-  // «сервер не отвечает» там, где просто не та раскладка клавиатуры.
-  function passwordIsSendable(candidate) {
-    return !candidate || /^[\x21-\x7E]+$/.test(candidate);
-  }
-
-  // Пароль владельца проверяется прямо в странице: она открывается и по http://
-  // в локальной сети, и со статик-хостинга, где crypto.subtle недоступен.
-  // Свёрток (две FNV-1a-суммы) свой на каждой установке и лежит в gitignore-файле
-  // public/js/owner-key.js, который пишет tools/set-owner-password.mjs.
-  // Без него вход идёт через сервер — как до этой проверки.
-  var OWNER_PRINT = typeof global.TRAFFIC_OWNER_PRINT === 'string'
-    ? global.TRAFFIC_OWNER_PRINT.trim()
-    : '';
-
-  function passwordPrint(text) {
-    var a = 0x811c9dc5;
-    var b = 0x9e3779b9;
-    for (var i = 0; i < text.length; i++) {
-      var code = text.charCodeAt(i);
-      a = Math.imul(a ^ code, 0x01000193);
-      b = Math.imul(b ^ (code + i), 0x85ebca6b);
-    }
-    return (a >>> 0).toString(16) + ':' + (b >>> 0).toString(16);
-  }
-
-  function checkOwnerPasswordLocal(candidate) {
-    var text = String(candidate == null ? '' : candidate).trim();
-    return !!text && !!OWNER_PRINT && passwordPrint(text) === OWNER_PRINT;
-  }
-
-  function hasOwnerKey() {
-    return !!OWNER_PRINT;
-  }
-
-  function adminHeaders() {
-    var headers = {};
-    if (ownerPassword && passwordIsSendable(ownerPassword)) headers['x-admin-password'] = ownerPassword;
-    return headers;
-  }
+  // ---------- конфиг и выгрузка ----------
 
   // Публичное чтение: серверный settings.json — единственный источник расписания.
   // null означает «серверного конфига нет»: статик-хостинг без API либо ошибка сети.
-  // Пароль владельца здесь не нужен и не отправляется.
   function loadConfig() {
     if (!global.fetch) return Promise.resolve(null);
     return global.fetch(configEndpoint, { cache: 'no-store' })
@@ -244,78 +196,13 @@
       });
   }
 
-  // Сверка пароля на сервере: вход в панель идёт через свёрток в странице, а этот
-  // запрос нужен тестам и диагностике — «сервер принимает пароль или нет».
-  // 401/403 → не подошёл, 503 → пароля на сервере нет, 404/405 → API здесь нет.
-  function checkOwnerPassword(candidate) {
-    if (!global.fetch) return Promise.resolve('offline');
-    if (!passwordIsSendable(candidate)) return Promise.resolve('charset');
-    var headers = {};
-    if (candidate) headers['x-admin-password'] = candidate;
-    return global.fetch(adminCheckEndpoint, { cache: 'no-store', headers: headers })
-      .then(function (response) {
-        if (response.status === 200) return 'ok';
-        if (response.status === 401) return 'wrong';
-        if (response.status === 403) return 'wrong';
-        if (response.status === 503) return 'missing';
-        if (response.status === 429) return 'slow';
-        if (response.status === 404 || response.status === 405) return 'noapi';
-        return 'offline';
-      })
-      .catch(function () { return 'offline'; });
-  }
-
-  // Пароль хранится только в этом браузере: вводить его заново на каждой правке
-  // не приходится, а на чужом телефоне без пароля настройки остаются закрыты.
-  function setOwnerPassword(value) {
-    var candidate = String(value || '').trim();
-    ownerPassword = passwordIsSendable(candidate) && candidate ? candidate : '';
-    if (ownerPassword) write(KEYS.owner, ownerPassword);
-    else {
-      try {
-        if (storageOk) localStorage.removeItem(KEYS.owner);
-        else delete memory[KEYS.owner];
-      } catch (err) { /* хранилища нет — пароль жил только в памяти */ }
-    }
-    return ownerPassword;
-  }
-
-  // Сохранённую запись сверяем по свёртку в этой же странице — сервер для входа
-  // не нужен. Сменили свёрток — старая запись перестаёт действовать сама.
-  // Без свёртка (форк без owner-key.js) судить не по чему: запись оставляем как есть.
-  function verifyStoredPassword() {
-    if (!ownerPassword || !OWNER_PRINT) return Promise.resolve('none');
-    if (!checkOwnerPasswordLocal(ownerPassword)) {
-      setOwnerPassword('');
-      return Promise.resolve('wrong');
-    }
-    return Promise.resolve('ok');
-  }
-
-  function rejectedPassword() {
-    setOwnerPassword('');
-    var denied = new Error('пароль не принят');
-    denied.code = 'owner-password';
-    return denied;
-  }
-
-  function noServerPassword() {
-    var off = new Error('на сервере не задан пароль владельца');
-    off.code = 'missing';
-    return off;
-  }
-
   function saveConfig(config) {
     if (!global.fetch) return Promise.reject(new Error('браузер без fetch'));
-    var headers = adminHeaders();
-    headers['content-type'] = 'application/json';
     return global.fetch(configEndpoint, {
       method: 'POST',
-      headers: headers,
+      headers: { 'content-type': 'application/json' },
       body: JSON.stringify(config)
     }).then(function (response) {
-      if (response.status === 401 || response.status === 403) throw rejectedPassword();
-      if (response.status === 503) throw noServerPassword();
       if (!response.ok) throw new Error('HTTP ' + response.status);
       return response.json();
     }).then(function (data) {
@@ -327,10 +214,8 @@
   function serverExportCsv(days) {
     if (!global.fetch) return Promise.reject(new Error('браузер без fetch'));
     var url = exportEndpoint + (exportEndpoint.indexOf('?') === -1 ? '?' : '&') + 'days=' + (days || 90);
-    return global.fetch(url, { cache: 'no-store', headers: adminHeaders() })
+    return global.fetch(url, { cache: 'no-store' })
       .then(function (response) {
-        if (response.status === 401 || response.status === 403) throw rejectedPassword();
-        if (response.status === 503) throw noServerPassword();
         if (!response.ok) throw new Error('HTTP ' + response.status);
         return response.text();
       });
@@ -437,11 +322,6 @@
     loadSummary: loadSummary,
     loadConfig: loadConfig,
     saveConfig: saveConfig,
-    checkOwnerPassword: checkOwnerPassword,
-    checkOwnerPasswordLocal: checkOwnerPasswordLocal,
-    hasOwnerKey: hasOwnerKey,
-    verifyStoredPassword: verifyStoredPassword,
-    setOwnerPassword: setOwnerPassword,
     serverExportCsv: serverExportCsv,
     analyze: analyze,
     csv: csv,
@@ -452,8 +332,7 @@
         server: serverState,
         queued: queue.length,
         storageOk: storageOk,
-        deviceId: deviceId,
-        owner: ownerPassword ? 'unlocked' : 'locked'
+        deviceId: deviceId
       };
     },
     setEndpoints: function (obs, sum) {

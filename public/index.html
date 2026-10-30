@@ -22,8 +22,8 @@
   <header class="topbar">
     <span class="brand">Светофор</span>
     <nav class="topnav">
-      <button type="button" class="iconbtn" id="openSettings" title="Длительности цикла — по паролю владельца" aria-label="Настройки">⚙</button>
-      <button type="button" class="iconbtn" id="openCalib" title="Калибровка по нажатиям — по паролю владельца" aria-label="Калибровка по нажатиям">⏱</button>
+      <button type="button" class="iconbtn" id="openSettings" title="Длительности цикла" aria-label="Настройки">⚙</button>
+      <button type="button" class="iconbtn" id="openCalib" title="Калибровка по нажатиям" aria-label="Калибровка по нажатиям">⏱</button>
       <button type="button" class="iconbtn" id="openStats" title="Статистика и подстройка" aria-label="Статистика">📊</button>
       <a class="iconbtn" href="add-to-home.html" title="Добавить на главный экран">📲</a>
     </nav>
@@ -93,12 +93,6 @@
     </div>
     <div class="panel-body">
       <p class="scope" id="configScope"></p>
-      <div class="unlock-row" id="settingsUnlock" hidden>
-        <input type="password" id="settingsPassword" autocomplete="off" autocapitalize="off"
-          spellcheck="false" placeholder="пароль владельца" aria-label="Пароль владельца">
-        <button type="button" class="primary" id="settingsUnlockBtn">Открыть</button>
-        <p class="feedback" id="settingsUnlockState" role="status" aria-live="polite"></p>
-      </div>
       <form id="settingsForm">
         <h3>Дневной цикл, секунд</h3>
         <div class="field-row">
@@ -153,7 +147,6 @@
       <button type="button" class="primary" id="applySettings">Сохранить на сервере</button>
       <button type="button" class="ghost" id="startCalib" hidden>Настроить по нажатиям</button>
       <button type="button" class="ghost" id="resetSettings">Исходные 120 / 3 / 25</button>
-      <button type="button" class="ghost" id="lockOwner" hidden>Закрыть доступ в этом браузере</button>
     </div>
   </section>
 
@@ -164,12 +157,6 @@
     </div>
     <div class="panel-body">
       <p class="scope" id="calibScope"></p>
-      <div class="unlock-row" id="calibUnlock" hidden>
-        <input type="password" id="calibPassword" autocomplete="off" autocapitalize="off"
-          spellcheck="false" placeholder="пароль владельца" aria-label="Пароль владельца">
-        <button type="button" class="primary" id="calibUnlockBtn">Открыть</button>
-        <p class="feedback" id="calibUnlockState" role="status" aria-live="polite"></p>
-      </div>
       <p>Встаньте у настоящего светофора. На экране пять светофоров — по одному на цикл:
         нажимайте ту лампу, которая включилась, время по МСК запишется рядом с ней.
         После пятого зелёного один лишний красный замыкает пятый цикл.</p>
@@ -197,8 +184,6 @@
     </div>
   </section>
 
-  <!-- свёрток пароля этой установки; файла может не быть — тогда вход идёт через сервер -->
-  <script src="js/owner-key.js" defer></script>
   <script src="js/schedule.js" defer></script>
   <script src="js/feedback.js" defer></script>
   <script src="js/app.js" defer></script>

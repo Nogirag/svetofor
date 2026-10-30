@@ -2,7 +2,7 @@
  * При изменении любого файла ниже поднимайте версию в CACHE. */
 'use strict';
 
-var CACHE = 'traffic-light-v18';
+var CACHE = 'traffic-light-v19';
 var SHELL = [
   './',
   './index.html',
@@ -53,10 +53,6 @@ self.addEventListener('fetch', function (event) {
 
   // Данные и сводки всегда из сети: их нельзя отдавать из кэша.
   if (url.pathname.indexOf('/api/') !== -1) return;
-
-  // Свёрток пароля свой на каждой установке и меняется вместе с паролем:
-  // устаревший из кэша закрыл бы вход новым паролем.
-  if (url.pathname.indexOf('owner-key.js') !== -1) return;
 
   // Навигация: сеть как источник истины (чтобы не зависеть на старой версии),
   // кэш — как резерв офлайн.
