@@ -15,7 +15,7 @@
   var CALIB_DEBOUNCE_MS = 250;
   // Пять светофоров = пять циклов на каждый профиль: столько меток на цвет и нужно.
   var CALIB_LIGHTS = 5;
-  var PANELS = ['answers', 'owner', 'stats', 'settings', 'calib'];
+  var PANELS = ['answers', 'stats', 'settings', 'calib'];
 
   var schedule = S.normalize(readJson(SCHEDULE_CACHE_KEY) || {});
   var clockOffsetMs = readClock();
@@ -34,8 +34,6 @@
   // снять оба и сохранить одним POST. Живут только на этой странице: сервер
   // получает уже посчитанный цикл, а не сырые нажатия.
   var calib = { active: false, target: 'day', marks: { day: [], night: [] } };
-  // Что открыть сразу после ввода пароля: «⚙» просит настройки, «⏱» — калибровку.
-  var pendingAfterUnlock = null;
 
   // 'server' — цикл отдаёт server/config/settings.json, 'none' — API нет в помине
   // (чисто статический хостинг), 'unknown' — ещё не проверяли.
@@ -312,9 +310,11 @@
   }
 
   function startCalibration() {
+    // Без пароля пятёрка открывается для просмотра, но нажатия не пишутся:
+    // панель просит пароль прямо у себя, без отдельного окна и переходов.
     if (!canEdit()) {
-      pendingAfterUnlock = 'calib';
-      openOwner('Пароль нужен, чтобы открыть калибровку.');
+      openPanel('calib', renderCalib);
+      focusFirst('calib', '#calibPassword');
       return;
     }
     if (!calib.active) {
@@ -328,6 +328,7 @@
       lastPhaseKey = null;
     }
     syncCalibUi();
+    panelNote('calibSaveState', '');
     openPanel('calib', renderCalib);
   }
 
@@ -588,6 +589,11 @@
     renderCalibTargets();
     renderCalibScope();
     renderCalibNext(marks);
+    // Без пароля пятёрка только показана: подсказываем, почему нажатия не считаются.
+    if (!canEdit()) {
+      var nextEl = el('calibNext');
+      if (nextEl) nextEl.textContent = 'Введите пароль владельца — и можно нажимать лампы.';
+    }
     renderCalibLights(marks);
     renderCalibCycles(marks);
     renderCalibPreview(marks, derived);
@@ -605,7 +611,12 @@
 
   function finishCalibration() {
     if (!calib.active) return;
-    if (!canEdit()) { openOwner('Доступ снова закрыт: введите пароль владельца.'); return; }
+    if (!canEdit()) {
+      openPanel('calib', renderCalib);
+      focusFirst('calib', '#calibPassword');
+      return;
+    }
+    panelNote('calibSaveState', '');
 
     var draft = scheduleDraft();
     var saved = [];
@@ -633,8 +644,7 @@
           ' МСК, ход ±' + item.derived.spreadSec + ' с';
       }).join('. ') + '. Сверки наблюдателей и дальше будут предлагать правки.';
     }, function (text) {
-      closePanels();
-      openOwner(text);
+      panelNote('calibSaveState', text);
     });
   }
 
@@ -686,8 +696,6 @@
 
   function closePanels() {
     if (closeTimer) { clearTimeout(closeTimer); closeTimer = null; }
-    // Панель пароля закрыли, не введя его, — прежняя просьба «открыть калибровку» не должна ждать.
-    pendingAfterUnlock = null;
     for (var i = 0; i < PANELS.length; i++) {
       var node = el(PANELS[i]);
       if (node) node.hidden = true;
@@ -715,70 +723,67 @@
 
   // ---------- доступ владельца ----------
 
-  function setOwnerState(text, kind) {
-    var node = el('ownerState');
-    if (node) {
-      node.className = 'feedback' + (kind ? ' ' + kind : '');
-      node.textContent = text || '';
+  // Сообщение об ошибке прямо в панели, где её и увидел человек.
+  function panelNote(id, text) {
+    var node = el(id);
+    if (!node) return;
+    node.className = 'feedback' + (text ? ' mismatch' : '');
+    node.textContent = text || '';
+  }
+
+  // Ответы серверной сверки — нужны, когда в странице нет свёртка (форк без owner-key.js).
+  function serverUnlockText(state) {
+    if (state === 'slow') return 'Слишком много попыток — подождите минуту.';
+    if (state === 'charset') {
+      return 'В пароле допустимы только латинские буквы, цифры и знаки без пробелов — проверьте раскладку.';
     }
+    if (state === 'missing') return 'На сервере пароль не задан, а свёртка в странице нет — вход не настроен.';
+    if (state === 'noapi' || state === 'offline') {
+      return 'Свёртка в странице нет, а сервер проверить не удалось. Свой свёрток создаёт ' +
+        'tools/set-owner-password.mjs.';
+    }
+    return 'Пароль не подошёл.';
   }
 
-  function openOwner(hint) {
-    setOwnerState(hint || '', hint ? 'mismatch' : '');
-    openPanel('owner');
-    focusFirst('owner', '#ownerPasswordInput');
-  }
-
-  // Пароль спрашиваем один раз: он остаётся в этом браузере, и следующая правка
-  // интервалов — это «⚙ → Сохранить», а не ввод ключа заново.
-  function unlockOwner() {
-    var input = el('ownerPasswordInput');
+  // Простой вход прямо в панели: поле, «Открыть» или Enter. Свёрток в странице
+  // проверяется мгновенно и без сети; без него спрашиваем сервер, как раньше.
+  function unlockInline(which) {
+    var isCalib = which === 'calib';
+    var input = el(isCalib ? 'calibPassword' : 'settingsPassword');
+    var note = el(isCalib ? 'calibUnlockState' : 'settingsUnlockState');
     var candidate = (input && input.value ? input.value : '').trim();
-    if (!candidate) {
-      setOwnerState('Введите пароль.', 'mismatch');
-      return;
-    }
-    var button = el('unlockOwner');
-    if (button) button.disabled = true;
-    setOwnerState('Проверяю…', '');
-    F.checkOwnerPassword(candidate).then(function (state) {
-      if (button) button.disabled = false;
-      if (state === 'ok') {
-        F.setOwnerPassword(candidate);
-        if (input) input.value = '';
-        var next = pendingAfterUnlock;
-        pendingAfterUnlock = null;
+    var say = function (text, kind) {
+      if (!note) return;
+      note.className = 'feedback' + (kind ? ' ' + kind : '');
+      note.textContent = text || '';
+    };
+    if (!candidate) { say('Введите пароль.', 'mismatch'); return; }
+
+    var accept = function () {
+      F.setOwnerPassword(candidate);
+      if (input) input.value = '';
+      var proceed = function () {
         updateAccessUi();
-        if (next === 'calib') startCalibration();
+        // Пароль верный, но сохранять его некуда: запись цикла живёт только на сервере.
+        if (!canEdit()) {
+          say('Пароль верный, но на этом адресе нет серверного API: сохранять цикл некуда. ' +
+            'Нужен Node-сервер или правка settings.json по FTP.', 'mismatch');
+          return;
+        }
+        if (isCalib) startCalibration();
         else openSettingsPanel();
-        return;
-      }
-      if (state === 'charset') {
-        setOwnerState('В пароле могут быть только латинские буквы, цифры и знаки ' +
-          'препинания без пробелов — проверьте раскладку клавиатуры.', 'mismatch');
-        return;
-      }
-      if (state === 'missing') {
-        setOwnerState('На сервере не задан пароль владельца: браузером менять нельзя. ' +
-          'Задайте его в server/config/admin.password — или правьте settings.json по FTP.', 'mismatch');
-        return;
-      }
-      if (state === 'slow') {
-        setOwnerState('Слишком много попыток — подождите минуту.', 'mismatch');
-        return;
-      }
-      if (state === 'offline') {
-        setOwnerState('Сервер не отвечает: проверить пароль сейчас нельзя. Если он только ' +
-          'что остановлен — запустите node server/api.mjs и дождитесь, пока страница его дождётся.', 'mismatch');
-        return;
-      }
-      if (state === 'noapi') {
-        setOwnerState('На этом адресе нет серверного API — страница открыта без Node-сервера ' +
-          '(статик-хостинг, file:// или другой порт). Пароль проверять негде: расписание ' +
-          'правится файлом server/config/settings.json.', 'mismatch');
-        return;
-      }
-      setOwnerState('Пароль не подошёл.', 'mismatch');
+      };
+      if (configSource === 'unknown') pullConfig().then(proceed);
+      else proceed();
+    };
+
+    if (F.checkOwnerPasswordLocal(candidate)) { accept(); return; }
+    if (F.hasOwnerKey()) { say('Пароль не подошёл.', 'mismatch'); return; }
+
+    say('Проверяю…', '');
+    F.checkOwnerPassword(candidate).then(function (state) {
+      if (state === 'ok') { accept(); return; }
+      say(serverUnlockText(state), 'mismatch');
     });
   }
 
@@ -795,15 +800,14 @@
       pullConfig().then(openSettings);
       return;
     }
-    if (!canEdit()) {
-      pendingAfterUnlock = 'settings';
-      openOwner(configSource === 'server' ? '' : 'Сервер с API не найден: без него расписание не правится.');
-      return;
-    }
+    // Панель открывается всегда; без пароля поля только для чтения, а пароль
+    // спрашивается тут же, строкой сверху, — отдельного окна больше нет.
     openSettingsPanel();
+    if (!canEdit()) focusFirst('settings', '#settingsPassword');
   }
 
   function openSettingsPanel() {
+    panelNote('settingsSaveState', '');
     openPanel('settings', fillForm);
   }
 
@@ -816,6 +820,14 @@
     toggleNode('exportServer', owner && configSource === 'server');
     toggleNode('lockOwner', owner && configSource === 'server');
     toggleNode('startCalib', editable);
+    toggleNode('settingsUnlock', !editable);
+    toggleNode('calibUnlock', !editable);
+    if (editable) {
+      ['settingsUnlockState', 'calibUnlockState'].forEach(function (id) {
+        var note = el(id);
+        if (note) { note.className = 'feedback'; note.textContent = ''; }
+      });
+    }
     syncCalibUi();
 
     var apply = el('applySettings');
@@ -1093,8 +1105,10 @@
     }).catch(function (err) {
       if (button) { button.disabled = false; button.textContent = label; }
       if (err.code === 'owner-password') {
+        F.setOwnerPassword('');
         updateAccessUi();
-        onDeny('Пароль больше не принимается сервером. Доступ к настройкам закрыт.');
+        onDeny('Сервер не принял пароль: свёртки в странице и на сервере разошлись. ' +
+          'Доступ к настройкам закрыт.');
         return;
       }
       if (err.code === 'missing') {
@@ -1107,24 +1121,33 @@
   }
 
   function applySettings() {
-    if (!canEdit()) { openOwner('Сначала пароль владельца.'); return; }
+    if (!canEdit()) {
+      openSettingsPanel();
+      focusFirst('settings', '#settingsPassword');
+      return;
+    }
+    panelNote('settingsSaveState', '');
     var draft = draftFromForm();
     saveToServer(draft, function () {
       closePanels();
       statsNote = 'Цикл сохранён на сервере — у всех устройств он обновится в течение полминуты.';
     }, function (text) {
-      closePanels();
-      openOwner(text);
+      panelNote('settingsSaveState', text);
     });
   }
 
   function resetSettings() {
+    if (!canEdit()) {
+      openSettingsPanel();
+      focusFirst('settings', '#settingsPassword');
+      return;
+    }
+    panelNote('settingsSaveState', '');
     saveToServer(defaultsDraft(), function () {
       closePanels();
       statsNote = 'Серверу вернули 120 / 3 / 25, ночной режим выключен.';
     }, function (text) {
-      closePanels();
-      openOwner(text);
+      panelNote('settingsSaveState', text);
     });
   }
 
@@ -1201,9 +1224,9 @@
     bindClick('closeStats', closePanels);
     bindClick('openSettings', openSettings);
     bindClick('openCalib', startCalibration);
+    bindClick('settingsUnlockBtn', function () { unlockInline('settings'); });
+    bindClick('calibUnlockBtn', function () { unlockInline('calib'); });
     bindClick('closeSettings', closePanels);
-    bindClick('closeOwner', closePanels);
-    bindClick('unlockOwner', unlockOwner);
     bindClick('lockOwner', lockOwner);
     bindClick('applySettings', applySettings);
     bindClick('resetSettings', resetSettings);
@@ -1233,12 +1256,13 @@
       if (event.key === 'Escape') closePanels();
     });
 
-    var passwordInput = el('ownerPasswordInput');
-    if (passwordInput) {
-      passwordInput.addEventListener('keydown', function (event) {
-        if (event.key === 'Enter') { event.preventDefault(); unlockOwner(); }
+    [['settingsPassword', 'settings'], ['calibPassword', 'calib']].forEach(function (pair) {
+      var input = el(pair[0]);
+      if (!input) return;
+      input.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter') { event.preventDefault(); unlockInline(pair[1]); }
       });
-    }
+    });
 
     if (form) {
       form.elements.nightEnabled.addEventListener('change', toggleNightCycle);
@@ -1315,9 +1339,9 @@
     setInterval(function () { F.flush(); }, 5 * 60 * 1000);
     pullConfig();
     setInterval(pullConfig, CONFIG_POLL_MS);
-    // сохранённый пароль могли отозвать на сервере — проверяем его молча
+    // сохранённый пароль сверяем со свёртком в странице — молча, при загрузке
     F.verifyStoredPassword().then(function (state) {
-      if (state === 'wrong') statsNote = 'Пароль владельца больше не принимается: настройки снова закрыты.';
+      if (state === 'wrong') statsNote = 'Сохранённый пароль больше не подходит: настройки снова закрыты.';
       updateAccessUi();
     });
     F.loadSummary().then(function (summary) {

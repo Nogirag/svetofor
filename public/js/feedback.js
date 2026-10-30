@@ -189,6 +189,35 @@
     return !candidate || /^[\x21-\x7E]+$/.test(candidate);
   }
 
+  // Пароль владельца проверяется прямо в странице: она открывается и по http://
+  // в локальной сети, и со статик-хостинга, где crypto.subtle недоступен.
+  // Свёрток (две FNV-1a-суммы) свой на каждой установке и лежит в gitignore-файле
+  // public/js/owner-key.js, который пишет tools/set-owner-password.mjs.
+  // Без него вход идёт через сервер — как до этой проверки.
+  var OWNER_PRINT = typeof global.TRAFFIC_OWNER_PRINT === 'string'
+    ? global.TRAFFIC_OWNER_PRINT.trim()
+    : '';
+
+  function passwordPrint(text) {
+    var a = 0x811c9dc5;
+    var b = 0x9e3779b9;
+    for (var i = 0; i < text.length; i++) {
+      var code = text.charCodeAt(i);
+      a = Math.imul(a ^ code, 0x01000193);
+      b = Math.imul(b ^ (code + i), 0x85ebca6b);
+    }
+    return (a >>> 0).toString(16) + ':' + (b >>> 0).toString(16);
+  }
+
+  function checkOwnerPasswordLocal(candidate) {
+    var text = String(candidate == null ? '' : candidate).trim();
+    return !!text && !!OWNER_PRINT && passwordPrint(text) === OWNER_PRINT;
+  }
+
+  function hasOwnerKey() {
+    return !!OWNER_PRINT;
+  }
+
   function adminHeaders() {
     var headers = {};
     if (ownerPassword && passwordIsSendable(ownerPassword)) headers['x-admin-password'] = ownerPassword;
@@ -215,10 +244,9 @@
       });
   }
 
-  // 401/403 → пароль не подошёл, 503 → на сервере пароль не задан вовсе.
-  // 404/405 → адрес отвечает, но серверного API здесь нет (статик-хостинг, другой
-  // порт, страница открыта из файла) — это не «сервер молчит», и человеку нужно
-  // сказать другое: пароль тут проверить нечем в принципе.
+  // Сверка пароля на сервере: вход в панель идёт через свёрток в странице, а этот
+  // запрос нужен тестам и диагностике — «сервер принимает пароль или нет».
+  // 401/403 → не подошёл, 503 → пароля на сервере нет, 404/405 → API здесь нет.
   function checkOwnerPassword(candidate) {
     if (!global.fetch) return Promise.resolve('offline');
     if (!passwordIsSendable(candidate)) return Promise.resolve('charset');
@@ -252,17 +280,16 @@
     return ownerPassword;
   }
 
-  // Отозванный на сервере пароль не должен оставлять «разблокировано».
+  // Сохранённую запись сверяем по свёртку в этой же странице — сервер для входа
+  // не нужен. Сменили свёрток — старая запись перестаёт действовать сама.
+  // Без свёртка (форк без owner-key.js) судить не по чему: запись оставляем как есть.
   function verifyStoredPassword() {
-    if (!ownerPassword) return Promise.resolve('none');
-    if (!passwordIsSendable(ownerPassword)) {
+    if (!ownerPassword || !OWNER_PRINT) return Promise.resolve('none');
+    if (!checkOwnerPasswordLocal(ownerPassword)) {
       setOwnerPassword('');
-      return Promise.resolve('charset');
+      return Promise.resolve('wrong');
     }
-    return checkOwnerPassword(ownerPassword).then(function (state) {
-      if (state === 'wrong') setOwnerPassword('');
-      return state;
-    });
+    return Promise.resolve('ok');
   }
 
   function rejectedPassword() {
@@ -411,6 +438,8 @@
     loadConfig: loadConfig,
     saveConfig: saveConfig,
     checkOwnerPassword: checkOwnerPassword,
+    checkOwnerPasswordLocal: checkOwnerPasswordLocal,
+    hasOwnerKey: hasOwnerKey,
     verifyStoredPassword: verifyStoredPassword,
     setOwnerPassword: setOwnerPassword,
     serverExportCsv: serverExportCsv,

@@ -30,6 +30,7 @@ const SERVER = path.join(ROOT, 'server', 'api.mjs');
 const PASSWORD_FILE = path.join(ROOT, 'server', 'config', 'admin.password');
 const SETTINGS_FILE = path.join(ROOT, 'server', 'config', 'settings.json');
 const CLIENT_FILE = path.join(ROOT, 'public', 'js', 'feedback.js');
+const KEY_FILE = path.join(ROOT, 'public', 'js', 'owner-key.js');
 const ADMIN_LIMIT = 20;
 
 const argv = process.argv.slice(2);
@@ -111,7 +112,25 @@ function request(base, pathname, password, init) {
 
 // ---------- клиент: гард Latin-1 и разбор ответов ----------
 
-function clientHarness(fetchImpl) {
+// Пароль вроде hex уже целиком в нижнем регистре, и toLowerCase() его не меняет —
+// для проверки «регистр важен» меняем регистр первой буквы.
+function flipCase(text) {
+  return text.replace(/[a-z]/i, (c) => (c === c.toLowerCase() ? c.toUpperCase() : c.toLowerCase()));
+}
+
+// Функция свёртка из public/js/feedback.js, повторённая для песочницы.
+function clientPrint(text) {
+  let a = 0x811c9dc5;
+  let b = 0x9e3779b9;
+  for (let i = 0; i < text.length; i++) {
+    const code = text.charCodeAt(i);
+    a = Math.imul(a ^ code, 0x01000193);
+    b = Math.imul(b ^ (code + i), 0x85ebca6b);
+  }
+  return (a >>> 0).toString(16) + ':' + (b >>> 0).toString(16);
+}
+
+function clientHarness(fetchImpl, ownerPrint) {
   const storage = new Map();
   const sandbox = {
     setTimeout,
@@ -124,6 +143,7 @@ function clientHarness(fetchImpl) {
       removeItem: (key) => storage.delete(key)
     }
   };
+  if (ownerPrint) sandbox.TRAFFIC_OWNER_PRINT = ownerPrint;
   sandbox.window = sandbox;
   sandbox.globalThis = sandbox;
   createContext(sandbox);
@@ -176,12 +196,42 @@ function clientTests(password) {
       pass('C05 статус после разблокировки — unlocked', harness.status().owner === 'unlocked');
       pass('C06 заголовок x-admin-password при верном пароле', stub.seen.some((c) => c.headers['x-admin-password']));
       const bad = stubFetch(401);
-      const other = clientHarness(bad.impl);
+      const other = clientHarness(bad.impl, clientPrint(password));
       other.setOwnerPassword('nope');
       return other.verifyStoredPassword().then((state) => {
         pass('C07 отозванный пароль клиент замечает', state === 'wrong' && other.status().owner === 'locked', 'state=' + state);
       });
     });
+  }).then(() => {
+    // Форк без owner-key.js: локального входа нет, но и сохранённую запись стирать не за что.
+    const bare = clientHarness(stubFetch(200).impl);
+    bare.setOwnerPassword('anything');
+    return bare.verifyStoredPassword().then((state) => {
+      pass('C10 без owner-key.js локальный вход выключен и запись не стирается',
+        bare.hasOwnerKey() === false && bare.checkOwnerPasswordLocal('anything') === false &&
+        state === 'none' && bare.status().owner === 'unlocked', 'state=' + state);
+    });
+  }).then(() => {
+    if (!password) {
+      skip('C08..C09 локальная сверка пароля', 'пароль не передан');
+      skip('C11 owner-key.js соответствует паролю', 'пароль не передан');
+      return null;
+    }
+    const harness = clientHarness(stubFetch(200).impl, clientPrint(password));
+    pass('C08 локальная сверка принимает верный пароль', harness.checkOwnerPasswordLocal(password) === true);
+    const variants = [password + 'x', password.slice(0, -1), flipCase(password), '', '   '];
+    const accepted = variants.filter((value) => harness.checkOwnerPasswordLocal(value));
+    pass('C09 локальная сверка отвергает варианты', accepted.length === 0, 'принято=' + accepted.length);
+
+    let keySource = '';
+    try { keySource = readFileSync(KEY_FILE, 'utf8'); } catch (err) { keySource = ''; }
+    if (!keySource) {
+      skip('C11 owner-key.js соответствует паролю', 'файла нет: вход идёт через сервер');
+    } else {
+      const found = (keySource.match(/TRAFFIC_OWNER_PRINT\s*=\s*'([^']*)'/) || [])[1];
+      pass('C11 owner-key.js соответствует паролю', found === clientPrint(password), 'print=' + found);
+    }
+    return null;
   });
 }
 
@@ -203,7 +253,7 @@ async function suiteHashedFile(base, password) {
     ['A05 заголовка нет → 401', null, 401],
     ['A06 свёрток вместо пароля → 401', readLine(PASSWORD_FILE), 401],
     ['A07 хеш без префикса → 401', createHash('sha256').update(password).digest('hex'), 401],
-    ['A08 нижний регистр пароля → 401', password.toLowerCase(), 401],
+    ['A08 другой регистр пароля → 401', flipCase(password), 401],
     ['A09 обрезанный пароль → 401', password.slice(0, Math.floor(password.length / 2)), 401],
     ['A10 пароль на символ длиннее → 401', password + 'x', 401],
     ['A11 пробел внутри пароля → 401', password.slice(0, 10) + ' ' + password.slice(10), 401]

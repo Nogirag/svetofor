@@ -556,6 +556,42 @@ body.is-flashing .lamp[data-phase="yellow"] {
   border-color: transparent;
 }
 
+/* Вход прямо в панели: одно поле и кнопка, без отдельного окна. */
+.unlock-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .5rem;
+  margin: .4rem 0 .75rem;
+}
+
+.unlock-row input {
+  flex: 1 1 160px;
+  min-height: 44px;
+  padding: .4rem .6rem;
+  border-radius: 10px;
+  border: 1px solid #2c323a;
+  background: #0f141a;
+  color: var(--text);
+  font-size: 1rem;
+}
+
+.unlock-row input:focus {
+  outline: 2px solid #2f81f7;
+  border-color: transparent;
+}
+
+.unlock-row button.primary {
+  flex: 0 0 auto;
+  min-width: 96px;
+}
+
+.unlock-row .feedback {
+  flex: 1 1 100%;
+  min-height: 0;
+  margin: 0;
+}
+
 .switch {
   display: flex;
   align-items: center;

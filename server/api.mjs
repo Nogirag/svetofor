@@ -450,7 +450,10 @@ function serveStatic(request, response, url) {
   readFile(target).then((data) => {
     const type = MIME[path.extname(target).toLowerCase()] || 'application/octet-stream';
     const headers = { 'content-type': type };
-    if (target.endsWith('index.html') || target.endsWith('add-to-home.html') || target.endsWith('sw.js')) {
+    // свёрток пароля меняется при смене пароля — кэшировать его нельзя
+    if (target.endsWith('owner-key.js')) {
+      headers['cache-control'] = 'no-store';
+    } else if (target.endsWith('index.html') || target.endsWith('add-to-home.html') || target.endsWith('sw.js')) {
       headers['cache-control'] = 'no-cache';
     } else if (type.startsWith('image/') || type.startsWith('text/css') || type.startsWith('text/javascript')) {
       headers['cache-control'] = 'public, max-age=3600';

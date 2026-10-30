@@ -72,31 +72,6 @@
     <p class="feedback" id="feedback" role="status" aria-live="polite"></p>
   </section>
 
-  <section class="panel" id="owner" hidden aria-label="Доступ к настройкам">
-    <div class="panel-head">
-      <h2>Пароль владельца</h2>
-      <button type="button" class="iconbtn" id="closeOwner" aria-label="Закрыть">✕</button>
-    </div>
-    <div class="panel-body">
-      <p>Длительности фаз и ночной режим закрыты паролем: одна правка меняет цикл
-        сразу на всех телефонах. На сервере хранится только проверка пароля —
-        <code>server/config/admin.password</code> содержит его свёрток, сам пароль
-        знает владелец (или его задаёт переменная окружения <code>ADMIN_PASSWORD</code>).</p>
-      <label class="field field-wide">
-        <span>Пароль</span>
-        <input type="password" id="ownerPasswordInput" autocomplete="off" autocapitalize="off"
-          spellcheck="false" placeholder="пароль владельца">
-      </label>
-      <p class="muted small">Пароль сохранится только в этом браузере: дальше «⚙» и «⏱» открываются
-        одним нажатием, вводить его заново не нужно. На других устройствах настройки остаются закрытыми.
-        Без пароля расписание правят по FTP в <code>server/config/settings.json</code> — страница подхватит правку сама.</p>
-      <p class="feedback" id="ownerState" role="status" aria-live="polite"></p>
-    </div>
-    <div class="panel-actions">
-      <button type="button" class="primary" id="unlockOwner">Разблокировать</button>
-    </div>
-  </section>
-
   <section class="panel" id="stats" hidden>
     <div class="panel-head">
       <h2>Статистика и подстройка</h2>
@@ -118,6 +93,12 @@
     </div>
     <div class="panel-body">
       <p class="scope" id="configScope"></p>
+      <div class="unlock-row" id="settingsUnlock" hidden>
+        <input type="password" id="settingsPassword" autocomplete="off" autocapitalize="off"
+          spellcheck="false" placeholder="пароль владельца" aria-label="Пароль владельца">
+        <button type="button" class="primary" id="settingsUnlockBtn">Открыть</button>
+        <p class="feedback" id="settingsUnlockState" role="status" aria-live="polite"></p>
+      </div>
       <form id="settingsForm">
         <h3>Дневной цикл, секунд</h3>
         <div class="field-row">
@@ -166,6 +147,7 @@
           ночного окна; свой «Красный включается в» переключает это на конкретный момент. Отметки
           наблюдателей при правке не перезаписываются: они привязаны к своему моменту времени.</p>
       </form>
+      <p class="feedback" id="settingsSaveState" role="status" aria-live="polite"></p>
     </div>
     <div class="panel-actions">
       <button type="button" class="primary" id="applySettings">Сохранить на сервере</button>
@@ -182,6 +164,12 @@
     </div>
     <div class="panel-body">
       <p class="scope" id="calibScope"></p>
+      <div class="unlock-row" id="calibUnlock" hidden>
+        <input type="password" id="calibPassword" autocomplete="off" autocapitalize="off"
+          spellcheck="false" placeholder="пароль владельца" aria-label="Пароль владельца">
+        <button type="button" class="primary" id="calibUnlockBtn">Открыть</button>
+        <p class="feedback" id="calibUnlockState" role="status" aria-live="polite"></p>
+      </div>
       <p>Встаньте у настоящего светофора. На экране пять светофоров — по одному на цикл:
         нажимайте ту лампу, которая включилась, время по МСК запишется рядом с ней.
         После пятого зелёного один лишний красный замыкает пятый цикл.</p>
@@ -199,6 +187,7 @@
         «Отменить последнее» убирает промах.</p>
       <div class="calib-log" id="calibLog"></div>
       <div class="calib-preview" id="calibPreview"></div>
+      <p class="feedback" id="calibSaveState" role="status" aria-live="polite"></p>
     </div>
     <div class="panel-actions">
       <button type="button" class="primary" id="finishCalib" disabled>Закончить и сохранить</button>
@@ -208,6 +197,8 @@
     </div>
   </section>
 
+  <!-- свёрток пароля этой установки; файла может не быть — тогда вход идёт через сервер -->
+  <script src="js/owner-key.js" defer></script>
   <script src="js/schedule.js" defer></script>
   <script src="js/feedback.js" defer></script>
   <script src="js/app.js" defer></script>
