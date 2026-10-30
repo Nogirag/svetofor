@@ -18,7 +18,8 @@ jobs:
 
       - name: Синтаксис
         run: |
-          for file in public/js/*.js public/sw.js server/api.mjs tools/*.mjs tests/*.mjs; do
+          shopt -s nullglob
+          for file in public/js/*.js public/sw.js server/api.mjs tools/*.mjs tools/*.js tests/*.mjs; do
             node --check "$file"
           done
 
