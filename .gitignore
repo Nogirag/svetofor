@@ -1,0 +1,24 @@
+# временные файлы Word/Excel
+~$*
+*.tmp
+
+# локальные настройки редакторов
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# служебное хостинга
+node_modules/
+.env
+.env.*
+
+# таблица отметок на сервере
+server/data/
+
+# секрет: пароль владельца (в git его класть нельзя)
+server/config/admin.password
+server/config/admin.key
+
+# открытый пароль владельца — только локально, в git нельзя
+password.txt

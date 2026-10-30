@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>Добавить на главный экран — Светофор</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0d1117">
+  <meta name="robots" content="noindex">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/svg+xml" href="assets/icons/icon.svg">
+  <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="doc">
+  <header class="topbar">
+    <a class="back" href="index.html" style="text-decoration:none;font-weight:600;color:var(--green)">← Светофор</a>
+    <nav class="topnav">
+      <button type="button" class="iconbtn" id="installBtn" hidden title="Установить приложение">⬇</button>
+    </nav>
+  </header>
+
+  <main>
+    <h1>Добавить на главный экран</h1>
+    <p class="muted">Страница работает в браузере, но как приложение на рабочем столе она не мигает, держит полноэкранный режим и запускается одним касанием.</p>
+
+    <div class="linkbox">
+      <span id="shareUrl"></span>
+      <button type="button" class="ghost" id="copyBtn" style="flex:0 0 auto;min-width:auto">Скопировать</button>
+    </div>
+
+    <section id="iosSteps" hidden>
+      <h2>iPhone и iPad (Safari)</h2>
+      <ol>
+        <li>Откройте эту страницу в <strong>Safari</strong> — в другом браузере пункта «На экран „Домой“» нет.</li>
+        <li>Нажмите кнопку <strong>Поделиться</strong> — квадрат со стрелкой вверх на панели внизу.</li>
+        <li>Пролистните список действий и выберите <strong>«На экран „Домой“»</strong>.</li>
+        <li>Подтвердите название <strong>«Светофор»</strong> и нажмите <strong>«Добавить»</strong>.</li>
+      </ol>
+      <p class="muted">Если Safari не показывает пункт «На экран „Домой“», обновите iOS: полноценное добавление PWA появилось в iOS 16.4 и новее.</p>
+    </section>
+
+    <section id="androidSteps" hidden>
+      <h2>Android (Chrome)</h2>
+      <ol>
+        <li>Откройте страницу в <strong>Chrome</strong>.</li>
+        <li>Нажмите меню <strong>⋮</strong> в правом верхнем углу.</li>
+        <li>Выберите <strong>«Добавить на главный экран»</strong> (в новых версиях — «Установить приложение»).</li>
+        <li>Подтвердите название и нажмите <strong>«Добавить»</strong>.</li>
+      </ol>
+      <p class="muted">Иногда Chrome сам показывает баннер «Установить приложение» внизу страницы или значок загрузки в адресной строке — это тот же результат.</p>
+    </section>
+
+    <section id="desktopSteps" hidden>
+      <h2>Компьютер</h2>
+      <ol>
+        <li>Chrome: значок <strong>⬇</strong> в правой части адресной строки → «Установить».</li>
+        <li>Safari на macOS: меню «Файл» → «Добавить в Dock».</li>
+      </ol>
+    </section>
+
+    <section id="installedNote" hidden>
+      <h2>Уже установлено</h2>
+      <p>Страница запущена как приложение на главном экране. Дополнительных действий не требуется.</p>
+    </section>
+
+    <h2>Что нужно знать</h2>
+    <ol>
+      <li>Отсчёт идёт по московскому времени (GMT+3) и привязан к часам, а не к моменту открытия страницы: все устройства, открывшие один адрес, показывают один и тот же цвет — даже если на телефоне другой часовой пояс.</li>
+      <li>Чтобы отметить цвет, нажмите «Отметить, какой цвет вы видите» — «Красный» и «Зелёный» появятся в меню снизу и закроются сами после выбора. Отметка уходит на сервер в общую таблицу; если сервер недоступен, она остаётся в памяти телефона и отправляется позже.</li>
+      <li>Расписание у всех одно и лежит оно на сервере: страница подхватывает правку файла сама, в течение получаса. ⚙ откроется только тем, кто ввёл пароль владельца, — на обычном телефоне он попросит пароль и ничего менять не даст. Отдельных настроек «только для этого телефона» больше нет.</li>
+      <li>Чтобы отметки не терялись, открывайте страницу по одному и тому же адресу и не чистите данные сайта.</li>
+    </ol>
+  </main>
+
+  <script src="js/add-to-home.js" defer></script>
+</body>
+</html>

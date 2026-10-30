@@ -1,0 +1,20 @@
+{
+  "day": {
+    "red": 120,
+    "yellow": 3,
+    "green": 25,
+    "phaseStart": "00:00:00"
+  },
+  "night": {
+    "enabled": false,
+    "start": "23:00",
+    "end": "06:00",
+    "mode": "flashing",
+    "cycle": {
+      "red": 60,
+      "yellow": 3,
+      "green": 25,
+      "phaseStart": "23:00:00"
+    }
+  }
+}
