@@ -35,9 +35,11 @@
   // получает уже посчитанный цикл, а не сырые нажатия.
   var calib = { active: false, target: 'day', marks: { day: [], night: [] } };
 
-  // 'server' — цикл отдаёт server/config/settings.json, 'none' — API нет в помине
-  // (чисто статический хостинг), 'unknown' — ещё не проверяли.
+  // 'server' — цикл отдаёт /api/config из server/config/settings.json, 'file' —
+  // статическая копия, в которую при публикации положили тот же конфиг
+  // (GitHub Pages), 'none' — нет ни API, ни файла сборки, 'unknown' — не проверяли.
   var configSource = 'unknown';
+  var configFileBuiltAt = '';
   var serverStamp = '';
 
   function el(id) { return document.getElementById(id); }
@@ -178,21 +180,36 @@
   }
 
   // Правка файла по FTP доходит до всех телефонов сама: перечитываем каждые 30 с.
+  // Если API нет, пробуем config.json, который сборка положила рядом со страницей.
   function pullConfig() {
     return F.loadConfig().then(function (cfg) {
-      var was = configSource;
-      configSource = cfg ? 'server' : 'none';
-      if (!cfg) {
-        if (was !== 'none') updateAccessUi();
+      if (cfg) {
+        configSource = 'server';
+        configFileBuiltAt = '';
+        adoptIfChanged(cfg);
+        updateAccessUi();
         return;
       }
-      var stamp = JSON.stringify(cfg);
-      if (stamp !== serverStamp) {
-        serverStamp = stamp;
-        adoptServerConfig(cfg);
-      }
-      updateAccessUi();
+      return F.loadFileConfig().then(function (file) {
+        var was = configSource;
+        if (file) {
+          configSource = 'file';
+          configFileBuiltAt = file.builtAt || '';
+          adoptIfChanged(file.config);
+        } else {
+          configSource = 'none';
+          configFileBuiltAt = '';
+        }
+        if (was !== configSource) updateAccessUi();
+      });
     });
+  }
+
+  function adoptIfChanged(cfg) {
+    var stamp = JSON.stringify(cfg);
+    if (stamp === serverStamp) return;
+    serverStamp = stamp;
+    adoptServerConfig(cfg);
   }
 
   // ---------- сигнал ----------
@@ -742,9 +759,13 @@
       scope.className = 'scope' + (hasServer() ? '' : ' warn');
       if (configSource === 'unknown') {
         scope.textContent = 'Проверяю, где живёт расписание…';
+      } else if (configSource === 'file') {
+        scope.textContent = 'Это статическая копия: значения взяты из server/config/settings.json ' +
+          'при публикации' + (configFileBuiltAt ? ' (' + builtStamp(configFileBuiltAt) + ' МСК)' : '') +
+          '. Правки здесь не сохраняются — меняйте файл и публикуйте заново.';
       } else if (configSource === 'none') {
-        scope.textContent = 'Это статическая копия без серверного API (например, GitHub Pages): ' +
-          'записывать настройки здесь некуда, поэтому панель только показывает встроенный цикл. ' +
+        scope.textContent = 'Это статическая копия без серверного API и без config.json из сборки: ' +
+          'записывать настройки здесь некуда, поэтому панель показывает встроенный цикл. ' +
           'Чтобы менять цикл и собирать отметки, страницу должен отдавать Node-сервер из server/api.mjs.';
       } else {
         scope.textContent = 'Цикл хранится на сервере в server/config/settings.json: сохранение меняет ' +
@@ -767,6 +788,16 @@
   function toggleNode(id, visible) {
     var node = el(id);
     if (node) node.hidden = !visible;
+  }
+
+  // Момент сборки config.json — по МСК, как и всё остальное время на странице.
+  function builtStamp(iso) {
+    var ms = Date.parse(iso);
+    if (isNaN(ms)) return '';
+    var d = new Date(ms + 180 * 60000);
+    function two(n) { return (n < 10 ? '0' : '') + n; }
+    return two(d.getUTCDate()) + '.' + two(d.getUTCMonth() + 1) + '.' + d.getUTCFullYear() + ' ' +
+      two(d.getUTCHours()) + ':' + two(d.getUTCMinutes());
   }
 
   // ---------- панель статистики ----------
@@ -810,7 +841,9 @@
 
     html += '<h3>Доступ и источник расписания</h3>';
     html += '<p>Расписание: <strong>' + scheduleLabel() + '</strong>. Правка длительностей: <strong>' +
-      (canEdit() ? 'через сервер, без пароля' : 'недоступна — нет серверного API') +
+      (canEdit() ? 'через сервер, без пароля'
+        : (configSource === 'file' ? 'недоступна — статика, меняется файлом и публикацией'
+          : 'недоступна — нет серверного API')) +
       '</strong>. Выгрузка таблицы сервера: <strong>' +
       (hasServer() ? 'открыта' : 'нет сервера') + '</strong>.</p>';
     html += '<p>Настройки одного устройства отключены: цикл у всех один, время алгоритма — московское (GMT+3).</p>';
@@ -883,6 +916,7 @@
 
   function scheduleLabel() {
     if (configSource === 'server') return 'server/config/settings.json';
+    if (configSource === 'file') return 'server/config/settings.json через config.json сборки';
     return configSource === 'none' ? 'код страницы — серверного конфига нет' : 'не проверено';
   }
 

@@ -2,7 +2,7 @@
  * При изменении любого файла ниже поднимайте версию в CACHE. */
 'use strict';
 
-var CACHE = 'traffic-light-v19';
+var CACHE = 'traffic-light-v20';
 var SHELL = [
   './',
   './index.html',
@@ -53,6 +53,20 @@ self.addEventListener('fetch', function (event) {
 
   // Данные и сводки всегда из сети: их нельзя отдавать из кэша.
   if (url.pathname.indexOf('/api/') !== -1) return;
+
+  // Конфиг из сборки меняется с каждой публикацией: сначала сеть, кэш — офлайн.
+  if (/(^|\/)config\.json$/.test(url.pathname)) {
+    event.respondWith(
+      fetch(request).then(function (response) {
+        if (response && response.status === 200) {
+          var copy = response.clone();
+          caches.open(CACHE).then(function (cache) { cache.put(request, copy); });
+        }
+        return response;
+      }).catch(function () { return caches.match(request); })
+    );
+    return;
+  }
 
   // Навигация: сеть как источник истины (чтобы не зависеть на старой версии),
   // кэш — как резерв офлайн.

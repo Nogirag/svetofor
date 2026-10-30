@@ -16,5 +16,8 @@ node_modules/
 # таблица отметок на сервере
 server/data/
 
+# конфиг для статики собирается из server/config/settings.json при публикации
+public/config.json
+
 # исходники в Word остаются локально; тексты для репозитория — в docs/
 *.docx

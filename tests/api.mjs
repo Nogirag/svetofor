@@ -11,8 +11,8 @@
  * в файле, и проверки записи в файл, лимита и удаления настроек пропускаются.
  */
 
-import { spawn, execSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { spawn, spawnSync, execSync } from 'node:child_process';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import net from 'node:net';
 import path from 'node:path';
@@ -25,6 +25,9 @@ const INDEX_FILE = path.join(ROOT, 'public', 'index.html');
 const CLIENT_FILE = path.join(ROOT, 'public', 'js', 'feedback.js');
 const APP_FILE = path.join(ROOT, 'public', 'js', 'app.js');
 const SW_FILE = path.join(ROOT, 'public', 'sw.js');
+const BUILD_FILE = path.join(ROOT, 'tools', 'build-config.mjs');
+const PAGES_FILE = path.join(ROOT, '.github', 'workflows', 'pages.yml');
+const GITIGNORE_FILE = path.join(ROOT, '.gitignore');
 const WRITE_LIMIT = 20;
 
 const argv = process.argv.slice(2);
@@ -120,6 +123,16 @@ function staticTests() {
   pass('S06 service worker не знает про owner-key.js', !/owner-key\.js/.test(sw));
   pass('S07 sw.js и index.html не ссылаются на удалённый файл',
     !existsSync(path.join(ROOT, 'public', 'js', 'owner-key.js')));
+
+  // Статика берёт расписание из сборки: страница знает config.json, SW не кэширует
+  // его навсегда, а публикация собирает файл из settings.json.
+  const pages = readText(PAGES_FILE);
+  pass('S08 клиент умеет читать config.json сборки', /function loadFileConfig/.test(client) &&
+    /loadFileConfig: loadFileConfig/.test(client));
+  pass('S09 страница различает источник file', /configSource === 'file'/.test(app));
+  pass('S10 sw.js берёт config.json из сети', /config\\\.json/.test(sw) && /caches\.match\(request\)/.test(sw));
+  pass('S11 pages.yml собирает конфиг', /node tools\/build-config\.mjs/.test(pages));
+  pass('S12 public/config.json не попадает в репозиторий', /public\/config\.json/.test(readText(GITIGNORE_FILE)));
 }
 
 // ---------- инстанс с временным конфигом: открытая запись ----------
@@ -234,6 +247,61 @@ async function suiteReceiverKey(base, key) {
   pass('C04 цикл пишется и с ключом приёмника', (await postConfig(base, { day: { red: 90 } })).status === 200);
 }
 
+// ---------- сборка config.json: статика должна видеть тот же цикл, что сервер ----------
+
+async function suiteStaticConfig() {
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'svetofor-build-'));
+  const src = path.join(dir, 'settings.json');
+  const out = path.join(dir, 'config.json');
+  try {
+    writeFileSync(src, JSON.stringify({
+      day: { red: 97, yellow: 4, green: 31, phaseStart: '08:00:00' },
+      night: {
+        enabled: true, start: '23:00', end: '06:00', mode: 'cycle',
+        cycle: { red: 61, yellow: 5, green: 26, phaseStart: '23:00:00' }
+      }
+    }, null, 2));
+
+    const run = spawnSync(process.execPath, [BUILD_FILE, src, out], { cwd: ROOT, encoding: 'utf8' });
+    pass('K01 сборка конфига без ошибок', run.status === 0, (run.stderr || '').trim().slice(0, 200));
+    const built = JSON.parse(readFileSync(out, 'utf8'));
+    pass('K02 config.json в форме ответа API', built.ok === true && built.source === 'file' &&
+      !isNaN(Date.parse(built.builtAt)), built.source);
+    pass('K03 дневной цикл из файла', built.config.day.red === 97 && built.config.day.yellow === 4 &&
+      built.config.day.green === 31 && built.config.day.phaseStart === '08:00:00');
+    pass('K04 ночной блок разложен как у сервера', built.config.nightEnabled === true &&
+      built.config.nightMode === 'cycle' && built.config.night.red === 61 &&
+      built.config.night.yellow === 5 && built.config.night.green === 26 &&
+      built.config.night.phaseStart === '23:00:00');
+
+    // тот же файл через сервер: сборка и /api/config не должны расходиться
+    const port = await freePort();
+    const srv = start(port, { CONFIG_FILE: src, DATA_DIR: path.join(dir, 'data') });
+    try {
+      const base = 'http://localhost:' + port;
+      await waitUp(base);
+      const api = await (await fetch(base + '/api/config')).json();
+      pass('K05 сборка и сервер отдают одно и то же',
+        JSON.stringify(api.config) === JSON.stringify(built.config), JSON.stringify(api.config).slice(0, 160));
+    } finally {
+      stop(srv);
+    }
+
+    writeFileSync(src, '{nope');
+    const brokenRun = spawnSync(process.execPath, [BUILD_FILE, src, out], { cwd: ROOT, encoding: 'utf8' });
+    const broken = JSON.parse(readFileSync(out, 'utf8'));
+    pass('K06 битый файл — публикуется дефолт', brokenRun.status === 0 &&
+      broken.config.day.red === 120 && broken.config.nightEnabled === false);
+
+    rmSync(src);
+    spawnSync(process.execPath, [BUILD_FILE, src, out], { cwd: ROOT, encoding: 'utf8' });
+    const missing = JSON.parse(readFileSync(out, 'utf8'));
+    pass('K07 нет файла — дефолт', missing.config.day.red === 120 && missing.config.day.green === 25);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
 // ---------- живой сервер ----------
 
 async function runAgainstBase() {
@@ -278,6 +346,7 @@ async function runSpawned() {
 }
 
 staticTests();
+await suiteStaticConfig();
 if (BASE) await runAgainstBase();
 else await runSpawned();
 

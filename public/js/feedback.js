@@ -23,6 +23,7 @@
   var endpoint = '/api/observations';
   var summaryEndpoint = '/api/summary';
   var configEndpoint = '/api/config';
+  var fileConfigEndpoint = 'config.json';
   var exportEndpoint = '/api/export.csv';
   var serverState = 'unknown';
   var summary = null;
@@ -196,6 +197,23 @@
       });
   }
 
+  // Статическая публикация: при деплое рядом со страницей появляется
+  // config.json — тот же ответ, что отдаёт /api/config. Запасной путь на случай,
+  // когда сервера нет вовсе (GitHub Pages), а расписание должно быть настоящим.
+  function loadFileConfig() {
+    if (!global.fetch) return Promise.resolve(null);
+    return global.fetch(fileConfigEndpoint, { cache: 'no-store' })
+      .then(function (response) {
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        return response.json();
+      })
+      .then(function (data) {
+        if (!data || !data.ok || !data.config) return null;
+        return { config: data.config, builtAt: data.builtAt || null };
+      })
+      .catch(function () { return null; });
+  }
+
   function saveConfig(config) {
     if (!global.fetch) return Promise.reject(new Error('браузер без fetch'));
     return global.fetch(configEndpoint, {
@@ -321,6 +339,7 @@
     flush: flush,
     loadSummary: loadSummary,
     loadConfig: loadConfig,
+    loadFileConfig: loadFileConfig,
     saveConfig: saveConfig,
     serverExportCsv: serverExportCsv,
     analyze: analyze,

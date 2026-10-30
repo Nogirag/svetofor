@@ -2,7 +2,8 @@ name: pages
 
 # Публикует статическую страницу из public/ на GitHub Pages.
 # Серверная часть (server/api.mjs) на Pages не работает: страница живёт без /api,
-# отметки копятся в браузере, панели настроек открываются только для чтения.
+# отметки копятся в браузере, панель настроек только читает. Чтобы она показывала
+# настоящий цикл, перед выкладкой собираем public/config.json из settings.json.
 
 on:
   push:
@@ -26,6 +27,15 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # /api на Pages нет, поэтому кладём рядом со страницей тот же ответ,
+      # который отдаёт сервер: страница прочитает config.json.
+      - name: Конфиг для статики
+        run: node tools/build-config.mjs
+
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
