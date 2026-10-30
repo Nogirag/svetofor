@@ -13,7 +13,7 @@
  * Режим по умолчанию поднимает свои инстансы сервера на свободных портах и гасит
  * их в конце. По живому серверу (--base) проверки «перебор закрыт 429» и «пароля
  * нет» не запускаются, а запись конфига отправляет то же содержимое settings.json,
- * что уже лежит, — файл остаётся побайтно тем же.
+ * что уже лежит, — файл остаётся прежним (переводы строк не в счёт: сервер пишет LF).
  */
 
 import { spawn, execSync } from 'node:child_process';
@@ -60,6 +60,11 @@ function readLine(file) {
   } catch (err) {
     return '';
   }
+}
+
+// сервер сохраняет конфиг с LF; в рабочей копии на Windows файл мог быть с CRLF
+function sameText(a, b) {
+  return a.replace(/\r\n/g, '\n') === b.replace(/\r\n/g, '\n');
 }
 
 async function freePort() {
@@ -298,7 +303,7 @@ async function suiteHashedFile(base, password) {
     body: before
   });
   pass('A16 POST /api/config с верным → 200', goodKey.status === 200, goodKey.status);
-  pass('A17 settings.json не изменился', readFileSync(SETTINGS_FILE, 'utf8') === before);
+  pass('A17 settings.json не изменился', sameText(readFileSync(SETTINGS_FILE, 'utf8'), before));
 
   pass('A18 выгрузка без пароля → 403', (await request(base, '/api/export.csv?days=7', null)).status === 403);
   pass('A19 выгрузка с верным → 200', (await request(base, '/api/export.csv?days=7', password)).status === 200);
