@@ -1,0 +1,33 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [18, 22]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: Синтаксис
+        run: |
+          for file in public/js/*.js public/sw.js server/api.mjs tools/*.mjs tests/*.mjs; do
+            node --check "$file"
+          done
+
+      - name: Расписание и калибровка
+        run: node tests/cycle.mjs
+
+      # В репозитории нет ни пароля, ни его свёртков — тесты создают их сами.
+      - name: Секрет для тестов входа
+        run: node tools/set-owner-password.mjs --password ci-owner-password-0123456789
+
+      - name: Вход к закрытым разделам
+        run: TL_ADMIN_PASSWORD=ci-owner-password-0123456789 node tests/owner-login.mjs
