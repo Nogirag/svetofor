@@ -11,9 +11,9 @@
     "end": "06:00",
     "mode": "flashing",
     "cycle": {
-      "red": 60,
+      "red": 35,
       "yellow": 3,
-      "green": 25,
+      "green": 193,
       "phaseStart": "23:00:00"
     }
   }
