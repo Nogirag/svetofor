@@ -16,6 +16,9 @@
   // Пять светофоров = пять циклов на каждый профиль: столько меток на цвет и нужно.
   var CALIB_LIGHTS = 5;
   var PANELS = ['answers', 'stats', 'settings', 'calib'];
+  // Перезагрузка страницы — тот же ритм, что и перечитывание цикла: раз в 30 с.
+  var RELOAD_MS = CONFIG_POLL_MS;
+  var RELOAD_TICK_MS = 250;
 
   var schedule = S.normalize(readJson(SCHEDULE_CACHE_KEY) || {});
   var clockOffsetMs = readClock();
@@ -41,6 +44,12 @@
   var configSource = 'unknown';
   var configFileBuiltAt = '';
   var serverStamp = '';
+
+  // Расписание перезагрузки: момент, когда страницу пора обновить, флаг
+  // «уже пора, но ждём» и время, когда вкладку увели в фон.
+  var reloadAt = Date.now() + RELOAD_MS;
+  var pendingReload = false;
+  var hiddenSince = 0;
 
   function el(id) { return document.getElementById(id); }
 
@@ -1229,6 +1238,52 @@
     if (node) node.addEventListener('click', handler);
   }
 
+  // ---------- автообновление страницы ----------
+
+  // Цикл и так перечитывается каждые 30 с, поэтому перезагрузка — страховка на
+  // случай залипшей вкладки и нужная вещь, когда на Pages выложили новую сборку.
+  // Пока открыта панель или идёт настройка по нажатиям, перезагрузку держим:
+  // нельзя выбрасывать человека из середины ввода или из съёма циклов.
+  function reloadBlocked() {
+    if (calib.active) return true;
+    for (var i = 0; i < PANELS.length; i++) {
+      var panel = el(PANELS[i]);
+      if (panel && !panel.hidden) return true;
+    }
+    return false;
+  }
+
+  function askReload() {
+    if (reloadBlocked()) { pendingReload = true; return; }
+    location.reload();
+  }
+
+  function renderReloadLine(ratio, held) {
+    var line = el('refreshLine');
+    var fill = el('refreshLineFill');
+    if (!line || !fill) return;
+    line.hidden = false;
+    line.classList.toggle('is-held', !!held);
+    fill.style.transform = 'scaleX(' + Math.max(0, Math.min(1, ratio)).toFixed(3) + ')';
+  }
+
+  function tickReload() {
+    var due = pendingReload || Date.now() >= reloadAt;
+    if (due && reloadBlocked()) { renderReloadLine(1, true); return; }
+    if (due) { location.reload(); return; }
+    renderReloadLine(1 - Math.max(0, reloadAt - Date.now()) / RELOAD_MS, false);
+  }
+
+  // Возврат из фоновой вкладки: браузер притупляет таймеры, так что за время в
+  // фоне свой срок 30 с мог и не наступить. Короткие мелькания (уведомление,
+  // переключение на секунду) перезагрузку не вызывают.
+  function onPageBack() {
+    if (!hiddenSince) return;
+    var away = Date.now() - hiddenSince;
+    hiddenSince = 0;
+    if (away >= 1000) askReload();
+  }
+
   function start() {
     var key = document.querySelector('meta[name="feedback-key"]');
     if (key && key.content) F.setKey(key.content);
@@ -1244,11 +1299,21 @@
     setInterval(function () { F.flush(); }, 5 * 60 * 1000);
     pullConfig();
     setInterval(pullConfig, CONFIG_POLL_MS);
+    tickReload();
+    setInterval(tickReload, RELOAD_TICK_MS);
     F.loadSummary().then(function (summary) {
       if (summary) renderStats();
     });
     document.addEventListener('visibilitychange', function () {
-      if (!document.hidden) { syncClock(); pullConfig(); render(); }
+      if (document.hidden) { hiddenSince = Date.now(); return; }
+      syncClock();
+      pullConfig();
+      render();
+      onPageBack();
+    });
+    // bfcache: страница вернулась из истории без загрузки — обновляем как из фона
+    window.addEventListener('pageshow', function (event) {
+      if (event.persisted) askReload();
     });
   }
 

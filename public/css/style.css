@@ -58,6 +58,8 @@ body { overflow: hidden; }
 .stage {
   height: 100%;
   overflow-y: auto;
+  /* Полосу прокрутки не показываем: она сдвигала бы светофор от центра. */
+  scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
   display: flex;
   flex-direction: column;
@@ -368,6 +370,31 @@ body.is-green .phase-name { color: var(--green); }
   letter-spacing: .02em;
 }
 
+/* ---- линия до следующего обновления страницы ---- */
+
+.refreshline {
+  position: fixed;
+  inset: auto 0 var(--safe-bottom) 0;
+  height: 3px;
+  background: rgba(139, 148, 158, .18);
+  overflow: hidden;
+  z-index: 6;
+}
+
+.refreshline[hidden] { display: none; }
+
+.refreshline-fill {
+  display: block;
+  height: 100%;
+  transform-origin: 0 50%;
+  transform: scaleX(0);
+  background: #2f81f7;
+}
+
+/* Открыта панель или идёт настройка по нажатиям: перезагрузка ждёт,
+   поэтому линия замирает полной и становится жёлтой. */
+.refreshline.is-held .refreshline-fill { background: var(--yellow); }
+
 /* ---- панель статистики ---- */
 
 .panel {
@@ -597,12 +624,13 @@ button.primary {
 
 .muted { color: var(--muted); }
 
-/* ---- узкий экран: кнопки шапки встают колонкой у правого края ---- */
+/* ---- узкий экран: шапка остаётся одной строкой и помещается в 320 px ---- */
 
-@media (max-width: 560px) {
-  .topbar { align-items: flex-start; }
-  .topnav { flex-direction: column; align-items: flex-end; gap: .45rem; }
-  .stage { padding-right: calc(3.5rem + env(safe-area-inset-right, 0px)); }
+@media (max-width: 400px) {
+  .topbar { padding-left: .75rem; padding-right: .75rem; }
+  .topnav { gap: .35rem; }
+  .iconbtn { width: 2.2rem; height: 2.2rem; font-size: 1rem; }
+  .brand { font-size: .95rem; }
 }
 
 /* ---- низкий экран: светофор мельче, чтобы красный не уходил за верх ---- */
@@ -612,6 +640,18 @@ button.primary {
   .light { gap: clamp(.45rem, 1.5vh, .9rem); padding: clamp(.5rem, 1.5vh, .9rem); }
   .timer { font-size: clamp(3.2rem, 14vh, 6.5rem); }
   .stage { gap: clamp(.6rem, 1.8vh, 1.2rem); }
+}
+
+/* телефон в браузере с адресной строкой: окно ниже, поэтому ужимаем всё,
+   чтобы столбик целиком влез и остался по центру, а не уехал вверх */
+@media (max-height: 700px) {
+  .lamp { --size: clamp(44px, 9.5vh, 74px); }
+  .light { gap: .35rem; padding: .45rem; }
+  .timer { font-size: clamp(2.6rem, 11vh, 4.6rem); }
+  .answers-note { display: none; }
+  .stage { gap: .5rem; padding-top: calc(var(--safe-top) + 3.3rem); }
+  .phase-name { font-size: 1rem; }
+  .footnote { font-size: .72rem; }
 }
 
 @media (prefers-reduced-motion: reduce) {

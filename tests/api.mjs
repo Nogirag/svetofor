@@ -25,6 +25,7 @@ const INDEX_FILE = path.join(ROOT, 'public', 'index.html');
 const CLIENT_FILE = path.join(ROOT, 'public', 'js', 'feedback.js');
 const APP_FILE = path.join(ROOT, 'public', 'js', 'app.js');
 const SW_FILE = path.join(ROOT, 'public', 'sw.js');
+const STYLE_FILE = path.join(ROOT, 'public', 'css', 'style.css');
 const BUILD_FILE = path.join(ROOT, 'tools', 'build-config.mjs');
 const PAGES_FILE = path.join(ROOT, '.github', 'workflows', 'pages.yml');
 const GITIGNORE_FILE = path.join(ROOT, '.gitignore');
@@ -133,6 +134,20 @@ function staticTests() {
   pass('S10 sw.js берёт config.json из сети', /config\\\.json/.test(sw) && /caches\.match\(request\)/.test(sw));
   pass('S11 pages.yml собирает конфиг', /node tools\/build-config\.mjs/.test(pages));
   pass('S12 public/config.json не попадает в репозиторий', /public\/config\.json/.test(readText(GITIGNORE_FILE)));
+
+  // Автообновление страницы: линия внизу, перезагрузка раз в 30 с и при возврате
+  // из фона — но не посреди открытой панели или съёма циклов.
+  const style = readText(STYLE_FILE);
+  pass('S13 на странице есть линия обновления', /id="refreshLine"/.test(html) &&
+    /id="refreshLineFill"/.test(html) && /\.refreshline-fill/.test(style));
+  pass('S14 перезагрузка ставится на интервал чтения конфига',
+    /var RELOAD_MS = CONFIG_POLL_MS;/.test(app) && /setInterval\(tickReload, RELOAD_TICK_MS\)/.test(app));
+  pass('S15 открытая панель и калибровка держат перезагрузку',
+    /function reloadBlocked\(\)\s*\{\s*if \(calib\.active\) return true;/.test(app) &&
+    /if \(due && reloadBlocked\(\)\)/.test(app));
+  pass('S16 возврат из фоновой вкладки обновляет страницу',
+    /if \(document\.hidden\) \{ hiddenSince = Date\.now\(\); return; \}/.test(app) &&
+    /onPageBack\(\);/.test(app) && /if \(away >= 1000\) askReload\(\);/.test(app));
 }
 
 // ---------- инстанс с временным конфигом: открытая запись ----------
