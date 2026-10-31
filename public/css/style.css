@@ -354,19 +354,35 @@ body.is-green .phase-name { color: var(--green); }
 .feedback.match { color: var(--green); }
 .feedback.mismatch { color: var(--yellow); }
 
+/* Подпись одна плотная строка: профиль, московское время и правка часов
+   через разделитель; на узком экране последнее обрезается многоточием. */
 .footnote {
   display: flex;
-  flex-wrap: wrap;
-  gap: .35rem 1rem;
-  justify-content: space-between;
+  flex-wrap: nowrap;
+  align-items: baseline;
+  justify-content: center;
   width: min(560px, 100%);
-  font-size: .8rem;
+  font-size: .7rem;
+  line-height: 1.25;
   color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.footnote > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.footnote > span + span {
+  margin-left: .45rem;
+  padding-left: .45rem;
+  border-left: 1px solid rgba(139, 148, 158, .3);
 }
 
 /* московские часы алгоритма: цифры не должны «плясать» между секундами */
 .footnote .clock {
-  font-variant-numeric: tabular-nums;
   letter-spacing: .02em;
 }
 
@@ -377,14 +393,15 @@ body.is-green .phase-name { color: var(--green); }
   /* Полосу приподнимаем от самого края: на телефоне нижняя кромка экрана
      занята жестом «домой», и линия там оставалась невидимой. */
   inset: auto .6rem calc(var(--safe-bottom) + .5rem) .6rem;
-  height: 5px;
+  height: 14px;
   border-radius: 999px;
-  background: rgba(139, 148, 158, .25);
+  background: rgba(139, 148, 158, .22);
   overflow: hidden;
   /* Поверх нижних меню: именно когда меню открыто, перезагрузка стоит,
-     и это надо видеть. Внизу панели оставлен отступ 16 px — линия в него
-     и попадает, ни одна кнопка под ней не прячется. */
+     и это надо видеть. Сама полоса не кликабельна — нажатия уходят кнопкам
+     под ней. */
   z-index: 12;
+  pointer-events: none;
 }
 
 .refreshline[hidden] { display: none; }
@@ -397,9 +414,26 @@ body.is-green .phase-name { color: var(--green); }
   background: linear-gradient(90deg, #1f6feb, #45a7ff);
 }
 
+/* Отсчёт секунд живёт внутри самой полосы: 8 px, чтобы влезть в 14 px высоты. */
+.refreshline-label {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 8px;
+  line-height: 1;
+  letter-spacing: .02em;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  color: #e6edf3;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, .55);
+}
+
 /* Открыта панель или идёт настройка по нажатиям: перезагрузка ждёт,
    поэтому линия замирает полной и становится жёлтой. */
 .refreshline.is-held .refreshline-fill { background: var(--yellow); }
+.refreshline.is-held .refreshline-label { color: #10151b; text-shadow: none; }
 
 /* ---- панель статистики ---- */
 
@@ -412,7 +446,9 @@ body.is-green .phase-name { color: var(--green); }
   background: var(--panel);
   border-top: 1px solid #2c323a;
   border-radius: 20px 20px 0 0;
-  padding: 1rem 1rem calc(var(--safe-bottom) + 1rem);
+  /* Снизу оставляем место под полосу обратного отсчёта (8 + 14 px), чтобы она
+     не легла на последние кнопки панели. */
+  padding: 1rem 1rem calc(var(--safe-bottom) + 2.4rem);
   box-shadow: 0 -20px 50px rgba(0, 0, 0, .55);
   z-index: 10;
   overflow: hidden;
@@ -657,7 +693,7 @@ button.primary {
   .answers-note { display: none; }
   .stage { gap: .5rem; padding-top: calc(var(--safe-top) + 3.3rem); }
   .phase-name { font-size: 1rem; }
-  .footnote { font-size: .72rem; }
+  .footnote { font-size: .66rem; }
 }
 
 @media (prefers-reduced-motion: reduce) {

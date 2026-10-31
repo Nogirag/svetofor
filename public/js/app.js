@@ -50,6 +50,7 @@
   var reloadAt = Date.now() + RELOAD_MS;
   var pendingReload = false;
   var hiddenSince = 0;
+  var lastReloadText = '';
 
   function el(id) { return document.getElementById(id); }
 
@@ -137,7 +138,7 @@
 
   function renderFootnote() {
     var node = el('syncState');
-    if (node) node.textContent = 'часы алгоритма: GMT+3 (МСК), ' + offsetSource;
+    if (node) node.textContent = 'GMT+3 · ' + offsetSource;
   }
 
   // ---------- серверный конфиг цикла ----------
@@ -1258,20 +1259,29 @@
     location.reload();
   }
 
-  function renderReloadLine(ratio, held) {
+  function renderReloadLine(ratio, held, seconds) {
     var line = el('refreshLine');
     var fill = el('refreshLineFill');
+    var label = el('refreshLineLabel');
     if (!line || !fill) return;
     line.hidden = false;
     line.classList.toggle('is-held', !!held);
     fill.style.transform = 'scaleX(' + Math.max(0, Math.min(1, ratio)).toFixed(3) + ')';
+    if (!label) return;
+    var text = held ? 'обновление приостановлено'
+                    : 'обновление страницы через ' + seconds + ' с';
+    if (text !== lastReloadText) {
+      lastReloadText = text;
+      label.textContent = text;
+    }
   }
 
   function tickReload() {
-    var due = pendingReload || Date.now() >= reloadAt;
-    if (due && reloadBlocked()) { renderReloadLine(1, true); return; }
+    var left = Math.max(0, reloadAt - Date.now());
+    var due = pendingReload || left === 0;
+    if (due && reloadBlocked()) { renderReloadLine(1, true, 0); return; }
     if (due) { location.reload(); return; }
-    renderReloadLine(1 - Math.max(0, reloadAt - Date.now()) / RELOAD_MS, false);
+    renderReloadLine(1 - left / RELOAD_MS, false, Math.ceil(left / 1000));
   }
 
   // Возврат из фоновой вкладки: браузер притупляет таймеры, так что за время в

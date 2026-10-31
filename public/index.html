@@ -54,13 +54,15 @@
     <footer class="footnote">
       <span id="profileInfo">день</span>
       <span id="clockState" class="clock">МСК --:--:--</span>
-      <span id="syncState">часы алгоритма: GMT+3 (МСК)</span>
+      <span id="syncState">GMT+3 · сверяем часы</span>
     </footer>
   </main>
 
-  <!-- Линия внизу: сколько осталось до перезагрузки страницы (30 с). -->
+  <!-- Линия внизу: заполнение до перезагрузки страницы (30 с) и секунды
+       обратного отсчёта прямо внутри полосы. -->
   <div class="refreshline" id="refreshLine" hidden aria-hidden="true">
     <span class="refreshline-fill" id="refreshLineFill"></span>
+    <span class="refreshline-label" id="refreshLineLabel">обновление страницы через 30 с</span>
   </div>
 
   <div class="scrim" id="scrim" hidden></div>

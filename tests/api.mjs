@@ -138,8 +138,9 @@ function staticTests() {
   // Автообновление страницы: линия внизу, перезагрузка раз в 30 с и при возврате
   // из фона — но не посреди открытой панели или съёма циклов.
   const style = readText(STYLE_FILE);
-  pass('S13 на странице есть линия обновления', /id="refreshLine"/.test(html) &&
-    /id="refreshLineFill"/.test(html) && /\.refreshline-fill/.test(style));
+  pass('S13 на странице есть линия обновления с отсчётом внутри',
+    /id="refreshLine"/.test(html) && /id="refreshLineFill"/.test(html) &&
+    /id="refreshLineLabel"/.test(html) && /\.refreshline-fill/.test(style));
   pass('S14 перезагрузка ставится на интервал чтения конфига',
     /var RELOAD_MS = CONFIG_POLL_MS;/.test(app) && /setInterval\(tickReload, RELOAD_TICK_MS\)/.test(app));
   pass('S15 открытая панель и калибровка держат перезагрузку',
@@ -148,8 +149,16 @@ function staticTests() {
   pass('S16 возврат из фоновой вкладки обновляет страницу',
     /if \(document\.hidden\) \{ hiddenSince = Date\.now\(\); return; \}/.test(app) &&
     /onPageBack\(\);/.test(app) && /if \(away >= 1000\) askReload\(\);/.test(app));
-  pass('S17 линия приподнята над краем экрана и поверх нижних меню',
-    /\.refreshline \{[^}]*inset: auto \.6rem calc\(var\(--safe-bottom\) \+ \.5rem\) \.6rem;[^}]*height: 5px;[^}]*z-index: 12;/.test(style));
+  pass('S17 линия приподнята над краем, поверх меню и не перехватывает нажатия',
+    /\.refreshline \{[^}]*inset: auto \.6rem calc\(var\(--safe-bottom\) \+ \.5rem\) \.6rem;[^}]*height: 14px;[^}]*z-index: 12;[^}]*pointer-events: none;/.test(style) &&
+    /\.panel \{[^}]*padding: 1rem 1rem calc\(var\(--safe-bottom\) \+ 2\.4rem\)/.test(style));
+  pass('S18 в линии пишется «обновление страницы через N с» шрифтом 8 px',
+    /'обновление страницы через ' \+ seconds \+ ' с'/.test(app) &&
+    /Math\.ceil\(left \/ 1000\)/.test(app) &&
+    /\.refreshline-label \{[^}]*font-size: 8px;/.test(style));
+  pass('S19 подпись под светофором сжата в одну строку',
+    /\.footnote \{[^}]*flex-wrap: nowrap;[^}]*font-size: \.7rem;/.test(style) &&
+    /'GMT\+3 · ' \+ offsetSource/.test(app));
 }
 
 // ---------- инстанс с временным конфигом: открытая запись ----------
