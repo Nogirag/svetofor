@@ -31,7 +31,11 @@ body { overflow: hidden; }
   justify-content: space-between;
   padding: calc(var(--safe-top) + .5rem) 1rem .5rem;
   z-index: 5;
+  /* Шапка прозрачна: пропускаем нажатия к лампе, а кнопки остаются кликабельными. */
+  pointer-events: none;
 }
+
+.topnav { pointer-events: auto; }
 
 .brand { font-weight: 600; letter-spacing: .04em; color: var(--muted); }
 .topnav { display: flex; gap: .5rem; }
@@ -53,13 +57,22 @@ body { overflow: hidden; }
 
 .stage {
   height: 100%;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: clamp(1rem, 3vh, 2rem);
-  padding: 4.5rem 1rem calc(var(--safe-bottom) + 1rem);
+  padding: calc(var(--safe-top) + 3.8rem) 1rem calc(var(--safe-bottom) + 1rem);
 }
+
+/* Свободное место делится между верхом светофора и низом подписи: на высоком
+   экране всё стоит по центру, а на телефоне, где контент выше окна, блок
+   начинается под шапкой и прокручивается, вместо того чтобы уезжать под неё
+   и обрезать верхний красный. */
+.light { margin-top: auto; }
+.footnote { margin-bottom: auto; }
 
 /* ---- сам светофор ---- */
 
@@ -583,6 +596,23 @@ button.primary {
 .small { font-size: .8rem; }
 
 .muted { color: var(--muted); }
+
+/* ---- узкий экран: кнопки шапки встают колонкой у правого края ---- */
+
+@media (max-width: 560px) {
+  .topbar { align-items: flex-start; }
+  .topnav { flex-direction: column; align-items: flex-end; gap: .45rem; }
+  .stage { padding-right: calc(3.5rem + env(safe-area-inset-right, 0px)); }
+}
+
+/* ---- низкий экран: светофор мельче, чтобы красный не уходил за верх ---- */
+
+@media (max-height: 940px) {
+  .lamp { --size: clamp(56px, 12vh, 104px); }
+  .light { gap: clamp(.45rem, 1.5vh, .9rem); padding: clamp(.5rem, 1.5vh, .9rem); }
+  .timer { font-size: clamp(3.2rem, 14vh, 6.5rem); }
+  .stage { gap: clamp(.6rem, 1.8vh, 1.2rem); }
+}
 
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
