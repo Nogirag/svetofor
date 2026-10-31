@@ -66,7 +66,7 @@ body { overflow: hidden; }
   align-items: center;
   justify-content: flex-start;
   gap: clamp(1rem, 3vh, 2rem);
-  padding: calc(var(--safe-top) + 3.8rem) 1rem calc(var(--safe-bottom) + 1rem);
+  padding: calc(var(--safe-top) + 3.8rem) 1rem calc(var(--safe-bottom) + 2.1rem);
 }
 
 /* Свободное место делится между верхом светофора и низом подписи: на высоком
@@ -374,11 +374,17 @@ body.is-green .phase-name { color: var(--green); }
 
 .refreshline {
   position: fixed;
-  inset: auto 0 var(--safe-bottom) 0;
-  height: 3px;
-  background: rgba(139, 148, 158, .18);
+  /* Полосу приподнимаем от самого края: на телефоне нижняя кромка экрана
+     занята жестом «домой», и линия там оставалась невидимой. */
+  inset: auto .6rem calc(var(--safe-bottom) + .5rem) .6rem;
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(139, 148, 158, .25);
   overflow: hidden;
-  z-index: 6;
+  /* Поверх нижних меню: именно когда меню открыто, перезагрузка стоит,
+     и это надо видеть. Внизу панели оставлен отступ 16 px — линия в него
+     и попадает, ни одна кнопка под ней не прячется. */
+  z-index: 12;
 }
 
 .refreshline[hidden] { display: none; }
@@ -388,7 +394,7 @@ body.is-green .phase-name { color: var(--green); }
   height: 100%;
   transform-origin: 0 50%;
   transform: scaleX(0);
-  background: #2f81f7;
+  background: linear-gradient(90deg, #1f6feb, #45a7ff);
 }
 
 /* Открыта панель или идёт настройка по нажатиям: перезагрузка ждёт,

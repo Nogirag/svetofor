@@ -2,7 +2,7 @@
  * При изменении любого файла ниже поднимайте версию в CACHE. */
 'use strict';
 
-var CACHE = 'traffic-light-v22';
+var CACHE = 'traffic-light-v23';
 var SHELL = [
   './',
   './index.html',

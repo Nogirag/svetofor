@@ -148,6 +148,8 @@ function staticTests() {
   pass('S16 возврат из фоновой вкладки обновляет страницу',
     /if \(document\.hidden\) \{ hiddenSince = Date\.now\(\); return; \}/.test(app) &&
     /onPageBack\(\);/.test(app) && /if \(away >= 1000\) askReload\(\);/.test(app));
+  pass('S17 линия приподнята над краем экрана и поверх нижних меню',
+    /\.refreshline \{[^}]*inset: auto \.6rem calc\(var\(--safe-bottom\) \+ \.5rem\) \.6rem;[^}]*height: 5px;[^}]*z-index: 12;/.test(style));
 }
 
 // ---------- инстанс с временным конфигом: открытая запись ----------
