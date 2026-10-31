@@ -65,16 +65,21 @@ body { overflow: hidden; }
   flex-direction: column;
   align-items: center;
   justify-content: flex-start;
-  gap: clamp(1rem, 3vh, 2rem);
+  --stage-gap: clamp(1rem, 3vh, 2rem);
+  gap: var(--stage-gap);
   padding: calc(var(--safe-top) + 3.8rem) 1rem calc(var(--safe-bottom) + 2.1rem);
 }
 
-/* Свободное место делится между верхом светофора и низом подписи: на высоком
-   экране всё стоит по центру, а на телефоне, где контент выше окна, блок
-   начинается под шапкой и прокручивается, вместо того чтобы уезжать под неё
-   и обрезать верхний красный. */
-.light { margin-top: auto; }
-.footnote { margin-bottom: auto; }
+/* Свободное место делят три пустых блока: половина уходит на верх светофора
+   (он стоит по центру и с места не сдвигается), половина — вниз, и там
+   пополам: между таймером и кнопкой отметки. Поэтому блок отметки лежит на
+   половине пустого места ниже таймера. Когда пустого места нет (тесный
+   экран), отступы схлопываются в ноль и контент просто начинается под
+   шапкой и прокручивается. */
+.push { flex: 0 0 auto; min-height: 0; }
+.push-top { flex-grow: 2; margin-bottom: calc(-1 * var(--stage-gap)); }
+.push-answers { flex-grow: 1; margin: calc(-1 * var(--stage-gap)) 0; }
+.push-bottom { flex-grow: 1; margin-top: calc(-1 * var(--stage-gap)); }
 
 /* ---- сам светофор ---- */
 
@@ -681,7 +686,7 @@ button.primary {
   .lamp { --size: clamp(56px, 12vh, 104px); }
   .light { gap: clamp(.45rem, 1.5vh, .9rem); padding: clamp(.5rem, 1.5vh, .9rem); }
   .timer { font-size: clamp(3.2rem, 14vh, 6.5rem); }
-  .stage { gap: clamp(.6rem, 1.8vh, 1.2rem); }
+  .stage { --stage-gap: clamp(.6rem, 1.8vh, 1.2rem); }
 }
 
 /* телефон в браузере с адресной строкой: окно ниже, поэтому ужимаем всё,
@@ -691,7 +696,7 @@ button.primary {
   .light { gap: .35rem; padding: .45rem; }
   .timer { font-size: clamp(2.6rem, 11vh, 4.6rem); }
   .answers-note { display: none; }
-  .stage { gap: .5rem; padding-top: calc(var(--safe-top) + 3.3rem); }
+  .stage { --stage-gap: .5rem; padding-top: calc(var(--safe-top) + 3.3rem); }
   .phase-name { font-size: 1rem; }
   .footnote { font-size: .66rem; }
 }

@@ -159,6 +159,20 @@ function staticTests() {
   pass('S19 подпись под светофором сжата в одну строку',
     /\.footnote \{[^}]*flex-wrap: nowrap;[^}]*font-size: \.7rem;/.test(style) &&
     /'GMT\+3 · ' \+ offsetSource/.test(app));
+  // Пустые блоки-толкатели: светофор остаётся на месте, а блок отметки
+  // опускается на половину пустого места под таймером. Компактные ярусы
+  // должны править --stage-gap, а не gap — иначе отступы толкателей
+  // не совпадают с реальными промежутками.
+  pass('S20 блок отметки опущен толкателями, а не фиксированным отступом',
+    /class="push push-top"/.test(html) &&
+    /class="push push-answers"[\s\S]*?<section class="answers"/.test(html) &&
+    /class="push push-bottom"/.test(html) &&
+    /\.push-top \{ flex-grow: 2;/.test(style) &&
+    /\.push-answers \{ flex-grow: 1;/.test(style) &&
+    /\.push-bottom \{ flex-grow: 1;/.test(style) &&
+    !/\.light \{ margin-top: auto/.test(style) &&
+    !/\.footnote \{ margin-bottom: auto/.test(style) &&
+    /--stage-gap: \.5rem/.test(style) && !/\.stage \{ gap: \.5rem/.test(style));
 }
 
 // ---------- инстанс с временным конфигом: открытая запись ----------

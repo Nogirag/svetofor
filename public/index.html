@@ -30,6 +30,8 @@
   </header>
 
   <main class="stage">
+    <div class="push push-top" aria-hidden="true"></div>
+
     <div class="light" id="light" role="img" aria-label="Красный сигнал">
       <span class="lamp" data-phase="red" aria-hidden="true"></span>
       <span class="lamp" data-phase="yellow" aria-hidden="true"></span>
@@ -41,6 +43,8 @@
       <div class="timer" id="timer">120</div>
       <div class="hint" id="hint">до жёлтого</div>
     </section>
+
+    <div class="push push-answers" aria-hidden="true"></div>
 
     <section class="answers" aria-label="Отметьте фактический цвет">
       <button type="button" class="mark" id="openAnswers">
@@ -56,6 +60,8 @@
       <span id="clockState" class="clock">МСК --:--:--</span>
       <span id="syncState">GMT+3 · сверяем часы</span>
     </footer>
+
+    <div class="push push-bottom" aria-hidden="true"></div>
   </main>
 
   <!-- Линия внизу: заполнение до перезагрузки страницы (30 с) и секунды
